@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko-KR">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>만들오토ver 240615.01</title>
+    <style>
+        .label1 {
+            display: inline-block;
+            width: 70px;
+            font-weight: bold;
+        }
+
+        .label_radio {
+            display: inline-block;
+            width: 80px;
+            cursor: pointer;
+        }
+
+        button {
+            cursor: pointer;
+            font-size: 15px;
+            margin: 3px;
+            width: 90px;
+        }
+
+        input[type="radio"] {
+            cursor: pointer;
+        }
+
+        fieldset {
+            width: 400px;
+            border-radius: 10px;
+            border-color: slategray;
+        }
+
+        fieldset>legend {
+            width: auto;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .image-container1 {
+            margin-top: 5px;
+            width: 395px;
+            height: auto;
+            overflow: auto;
+        }
+
+        img {
+            width: 100%;
+            height: auto;
+        }
+
+        .collapse {
+            cursor: pointer;
+            /* border: solid 1px black; */
+            background-color: #f1f3f5;
+            border-radius: 5px;
+        }
+
+        .collapse:hover {
+            background-color: #dee2e6;
+        }
+    </style>
+</head>
+
+<body>
+    <fieldset class="field1">
+        <legend onclick="toggle_setting()" class="collapse">🔍설정</legend>
+        <div id="setting_container" style="display:inline-block">
+            <label class="label1">화면캡처</label>
+            <input id="inp_stream_rtc" type="radio" name="stream_select" value="rtc" checked=true>
+            <label class="label_radio" for="inp_stream_rtc">Web RTC</label>
+            <input id="inp_stream_url" type="radio" name="stream_select" value="url">
+            <label class="label_radio" for="inp_stream_url">From URL</label>
+            <button id="btn_start" class="btn1" onclick="start_capture()" disabled="true">캡처시작</button>
+            <br>
+            <label class="label1">입력장치</label>
+            <input id="inp_input_serial" type="radio" name="input_select" value="serial" checked=true>
+            <label class="label_radio" for="inp_input_serial">Serial</label>
+            <input id="inp_input_url" type="radio" name="input_select" value="url">
+            <label class="label_radio" for="inp_input_url">From URL</label>
+            <button id="btn_connect" class="btn1" onclick="connect_input()">연결하기</button>
+            <br>
+            <div style="display: flex; justify-content:center;">
+                <button onclick="set_fps()">FPS설정</button><button onclick="popup()">새창열기</button><button onclick="download_img()">캡처저장</button><button>사용방법</button>
+            </div>
+        </div>
+    </fieldset>
+    <fieldset>
+        <legend onclick="toggle_viewer()" class="collapse">🔍캡처이미지</legend>
+        <div class="image-container1">
+            <canvas id="viewer" style="width:395px; display:inline-block"></canvas>
+        </div>
+    </fieldset>
+    <fieldset id="field_run" class="field1">
+        <legend onclick="toggle_control()" class="collapse">🔍실행제어</legend>
+        <div style="display: flex; justify-content:center;">
+            <button onclick="load_json_file()">슬롯 추가</button><button onclick="all_off()">전부 해제</button>
+        </div>
+        <div id="control_container" style="display:inline-block">
+        </div>
+    </fieldset>
+</body>
+<script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="cv_ready()" type="text/javascript"></script>
+<script src="mandlohto.js"></script>
+</html>

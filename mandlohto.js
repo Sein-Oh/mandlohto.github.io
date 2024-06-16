@@ -1,6 +1,7 @@
 const userdata = {}
 const cooling = {}
 const target_img = {}
+const target_img_loc = {}
 const run = {}
 const video = document.createElement("video")
 const img = document.createElement("img")
@@ -48,6 +49,15 @@ const send_keys = async (data) => {
         } else if (key.indexOf("-") >= 0) {
             const argument = key.slice(1, key.length)
             await delay(argument * 1000)
+        } else if (data.type == "imgslot" && key == "click") {
+            const click_command = `${target_img_loc[data.name][0]},${target_img_loc[data.name][1]}`
+            if (input_type == "url") {
+                fetch(`${input_url}/${click_command}`)
+            } else if (input_type == "serial") {
+                send_serial(click_command)
+            } else {
+                console.log(`연결된 입력기가 없습니다. ${click_command}`)
+            }
         }
         else {
             if (input_type == "url") {
@@ -87,7 +97,6 @@ const start_capture = () => {
                 localStorage.setItem("stream_url", stream_url)
                 img.src = stream_url
                 setTimeout(stream_loop, 1000)
-
             }
         }
     })
@@ -188,11 +197,20 @@ const rtc_loop = () => {
             cv.matchTemplate(target_img[slot], croppedImg, result, cv.TM_CCOEFF, mask)
             const roc = cv.minMaxLoc(result, mask)
 
+            const center_x = roc.maxLoc.x + parseInt(target_img[slot].cols / 2)
+            const center_y = roc.maxLoc.y + parseInt(target_img[slot].rows / 2)
+            target_img_loc[slot] = [center_x, center_y]
+
             resized_frame.delete()
             croppedImg.delete()
             result.delete()
             mask.delete()
             document.getElementById(`${slot}-value`).value = `설정[${parseInt(thres).toLocaleString()}] 인식[${parseInt(roc.maxVal).toLocaleString()}]`
+
+            if (roc.maxVal >= thres && cooling[slot] == false) {
+                cool_run(slot)
+                send_keys(userdata[slot])
+            }
         }
     }
     frame.delete()
@@ -290,14 +308,22 @@ const stream_loop = () => {
             cv.matchTemplate(target_img[slot], croppedImg, result, cv.TM_CCOEFF, mask)
             const roc = cv.minMaxLoc(result, mask)
 
+            const center_x = roc.maxLoc.x + parseInt(target_img[slot].cols / 2)
+            const center_y = roc.maxLoc.y + parseInt(target_img[slot].rows / 2)
+            target_img_loc[slot] = [center_x, center_y]
+
             resized_frame.delete()
             croppedImg.delete()
             result.delete()
             mask.delete()
             document.getElementById(`${slot}-value`).value = `설정[${parseInt(thres).toLocaleString()}] 인식[${parseInt(roc.maxVal).toLocaleString()}]`
+
+            if (roc.maxVal >= thres && cooling[slot] == false) {
+                cool_run(slot)
+                send_keys(userdata[slot])
+            }
         }
     }
-
     frame.delete()
     setTimeout(stream_loop, 1000 / fps)
 }

@@ -2,108 +2,427 @@
 <html lang="ko-KR">
 
 <head>
-    <meta charset="UTF-8" />
-    <title>만들오토ver 240617.01</title>
-    <style>
-        .label1 {
-            display: inline-block;
-            width: 70px;
-            font-weight: bold;
-        }
+  <meta charset="UTF-8" />
+  <title>만들오토ver 240815.01</title>
+  <link rel="stylesheet" href="https://unpkg.com/7.css">
+  <style>
+    body {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
 
-        .label_radio {
-            display: inline-block;
-            width: 80px;
-            cursor: pointer;
-        }
+    button {
+      width: 95px;
+      margin: 1px 3px 3px 1px;
+    }
 
-        button {
-            cursor: pointer;
-            font-size: 15px;
-            margin: 3px;
-            width: 90px;
-        }
-
-        input[type="radio"] {
-            cursor: pointer;
-        }
-
-        fieldset {
-            width: 400px;
-            border-radius: 10px;
-            border-color: slategray;
-        }
-
-        fieldset>legend {
-            width: auto;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .image-container1 {
-            margin-top: 5px;
-            width: 395px;
-            height: auto;
-            overflow: auto;
-        }
-
-        img {
-            width: 100%;
-            height: auto;
-        }
-
-        .collapse {
-            cursor: pointer;
-            /* border: solid 1px black; */
-            background-color: #f1f3f5;
-            border-radius: 5px;
-        }
-
-        .collapse:hover {
-            background-color: #dee2e6;
-        }
-    </style>
+    fieldset>legend {
+      width: auto;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  </style>
 </head>
 
 <body>
-    <fieldset class="field1">
-        <legend onclick="toggle_setting()" class="collapse">🔍설정</legend>
-        <div id="setting_container" style="display:inline-block">
-            <label class="label1">화면캡처</label>
-            <input id="inp_stream_rtc" type="radio" name="stream_select" value="rtc" checked=true>
-            <label class="label_radio" for="inp_stream_rtc">Web RTC</label>
-            <input id="inp_stream_url" type="radio" name="stream_select" value="url">
-            <label class="label_radio" for="inp_stream_url">From URL</label>
-            <button id="btn_start" class="btn1" onclick="start_capture()" disabled="true">캡처시작</button>
-            <br>
-            <label class="label1">입력장치</label>
-            <input id="inp_input_serial" type="radio" name="input_select" value="serial" checked=true>
-            <label class="label_radio" for="inp_input_serial">Serial</label>
-            <input id="inp_input_url" type="radio" name="input_select" value="url">
-            <label class="label_radio" for="inp_input_url">From URL</label>
-            <button id="btn_connect" class="btn1" onclick="connect_input()">연결하기</button>
-            <br>
-            <div style="display: flex; justify-content:center;">
-                <button onclick="set_fps()">FPS설정</button><button onclick="popup()">새창열기</button><button
-                    onclick="download_img()">캡처저장</button><button onclick="window.open('https://mandloh.tistory.com/147')">사용방법</button>
-            </div>
-        </div>
-    </fieldset>
-    <fieldset>
-        <legend onclick="toggle_viewer()" class="collapse">🔍캡처이미지</legend>
-        <div class="image-container1">
-            <canvas id="viewer" style="width:395px; display:inline-block"></canvas>
-        </div>
-    </fieldset>
-    <fieldset id="field_run" class="field1">
-        <legend onclick="toggle_control()" class="collapse">🔍실행제어</legend>
-        <div style="display: flex; justify-content:center;">
-            <button onclick="load_json_file()">슬롯 추가</button><button onclick="all_off()">전부 해제</button>
-        </div>
-        <div id="control_container" style="display:inline-block">
-        </div>
-    </fieldset>
+  <fieldset style="width:300px">
+    <legend>App</legend>
+    <div style="display: flex; justify-content:center;">
+      <button class="start" onclick="start_browser()" disabled="true">실행</button>
+      <button onclick="set_fps()">FPS설정</button>
+      <button onclick="popup()">새창열기</button>
+    </div>
+    <div style="width:300px; height:auto; border:1px solid lightgray; overflow:auto;">
+      <canvas id="viewer" style="width:300px; display:inline-block"></canvas>
+    </div>
+    <textarea id="info" readonly="true" rows="4" style="width:300px; resize:none; margin-top:5px"></textarea>
+    <div style="display: flex; justify-content:center;">
+      <button style="width:145px" onclick="load_json_file()">슬롯 추가</button>
+      <button style="width:145px" onclick="all_off()">체크 해제</button>
+    </div>
+  </fieldset>
 </body>
+<script>
+
+  const write = (msg) => {
+    let h = now.getHours()
+    let m = now.getMinutes()
+    let s = now.getSeconds()
+    info.value = info.value + "\n" + `[${h}:${m}:${s}] ${msg}`
+    info.scrollTop = info.scrollHeight;
+  }
+
+  const cv_ready = () => {
+    write("opencv.js loaded.")
+    document.querySelectorAll(".start").forEach(ele => {
+      ele.disabled = false
+    })
+  }
+
+  const cool_run = (key) => {
+    cooling[key] = true
+    setTimeout(() => { cooling[key] = false }, userdata[key].cooltime * 1000)
+  }
+
+  const connect_serial = async () => {
+    try {
+      const port = await navigator.serial.requestPort()
+      await port.open({ baudRate: 9600 })
+      writer = port.writable.getWriter()
+      console.log("Serial connected.")
+      write("Serial connected")
+    } catch (err) {
+      console.error("에러: " + err)
+      alert("Serial connect failed.")
+    }
+  }
+
+  const start_capture = async () => {
+    try {
+      const constraints = { audio: false, video: true }
+      const capture_stream = await navigator.mediaDevices.getDisplayMedia(constraints)
+      video.srcObject = capture_stream
+      video.play()
+      write("Capture start")
+    } catch (err) {
+      console.error(err)
+      alert("capture failed.")
+    }
+  }
+
+  const start_browser = async () => {
+    window.resizeTo(600, 600)
+    await start_capture()
+    write("Connect to serial")
+    await connect_serial()
+    capture_loop()
+    timer_loop()
+    window.resizeTo(360, 600)
+  }
+
+  const capture_loop = () => {
+    video.width = video.videoWidth
+    video.height = video.videoHeight
+    const cap = new cv.VideoCapture(video);
+    const frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+    cap.read(frame);
+    cv.imshow("viewer", frame)
+
+    for (slot of Object.keys(userdata)) {
+      if (userdata[slot].type == "hpslot") {
+        if (run[slot] == true) {
+          const x1 = userdata[slot].roi_p1[0]
+          const y1 = userdata[slot].roi_p1[1]
+          const x2 = userdata[slot].roi_p2[0]
+          const y2 = userdata[slot].roi_p2[1]
+          const thres = userdata[slot].thres
+
+          const capture_size = userdata[slot].capture_size
+          let resized_frame = new cv.Mat()
+          let dsize = new cv.Size(capture_size[0], capture_size[1])
+          cv.resize(frame, resized_frame, dsize, 0, 0, cv.INTER_AREA)
+
+          let hpImg = new cv.Mat()
+          let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+          hpImg = resized_frame.roi(rect)
+
+          const hpImgPlanes = new cv.MatVector()
+          cv.split(hpImg, hpImgPlanes);
+          const hpRed = hpImgPlanes.get(0)
+
+          const hpBlur = new cv.Mat()
+          const ksize = new cv.Size(5, 5)
+          const anchor = new cv.Point(-1, -1)
+          cv.blur(hpRed, hpBlur, ksize, anchor, cv.BORDER_DEFAULT)
+
+          const hpThres = new cv.Mat()
+          cv.threshold(hpBlur, hpThres, thres, 255, cv.THRESH_BINARY)
+
+          const hpData1D = []
+          const hpData2D = []
+          const hpMaxAry = []
+
+          hpThres.data.forEach(value => hpData1D.push(value))
+
+          while (hpData1D.length) hpData2D.push(hpData1D.splice(0, hpThres.size().width))
+
+          for (i = 0; i < hpData2D.length; i++) {
+            const idx = hpData2D[i].reverse().indexOf(255)
+            const value = idx < 0 ? hpImg.size().width : idx
+            hpMaxAry.push(value)
+          }
+
+          const hpMinIdx = Math.min.apply(null, hpMaxAry) < 0 ? 0 : Math.min.apply(null, hpMaxAry)
+          const hpRatio_ = Math.round((hpThres.size().width - hpMinIdx) / hpThres.size().width * 100)
+          const hpRatio = hpRatio_ == 0 ? 100 : hpRatio_
+
+          resized_frame.delete()
+          hpImg.delete()
+          hpImgPlanes.delete()
+          hpRed.delete()
+          hpBlur.delete()
+          hpThres.delete()
+
+          const min_hp = userdata[slot].hp_range[0]
+          const max_hp = userdata[slot].hp_range[1]
+          document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"]}\nVALUE: ${hpRatio}`
+
+          if (hpRatio >= min_hp && hpRatio <= max_hp && cooling[slot] == false) {
+            cool_run(slot)
+            send_keys(userdata[slot])
+          }
+        }
+      }
+
+      if (userdata[slot].type == "imgslot" && run[slot] == true) {
+        const x1 = userdata[slot].roi_p1[0]
+        const y1 = userdata[slot].roi_p1[1]
+        const x2 = userdata[slot].roi_p2[0]
+        const y2 = userdata[slot].roi_p2[1]
+        const thres = userdata[slot].thres
+
+        const capture_size = userdata[slot].capture_size
+        let resized_frame = new cv.Mat()
+        let dsize = new cv.Size(capture_size[0], capture_size[1])
+        cv.resize(frame, resized_frame, dsize, 0, 0, cv.INTER_AREA)
+
+        let croppedImg = new cv.Mat()
+        let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+        croppedImg = resized_frame.roi(rect)
+
+        const result = new cv.Mat()
+        const mask = new cv.Mat()
+        cv.matchTemplate(target_img[slot], croppedImg, result, cv.TM_CCOEFF, mask)
+        const roc = cv.minMaxLoc(result, mask)
+
+        const center_x = roc.maxLoc.x + parseInt(target_img[slot].cols / 2)
+        const center_y = roc.maxLoc.y + parseInt(target_img[slot].rows / 2)
+        target_img_loc[slot] = [center_x, center_y]
+
+        resized_frame.delete()
+        croppedImg.delete()
+        result.delete()
+        mask.delete()
+        document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"]}\nVALUE: ${parseInt(roc.maxVal).toLocaleString()}`
+
+
+        if (roc.maxVal >= thres && cooling[slot] == false) {
+          cool_run(slot)
+          send_keys(userdata[slot])
+        }
+      }
+    }
+    frame.delete()
+    setTimeout(capture_loop, 1000 / fps)
+  }
+
+  const timer_loop = () => {
+    for (slot of Object.keys(userdata)) {
+      if (userdata[slot].type == "timer") {
+        if (run[slot] == true && cooling[slot] == false) {
+          cool_run(slot)
+          send_keys(userdata[slot])
+        }
+      }
+    }
+    setTimeout(timer_loop, 1000 / fps)
+  }
+
+  const delay = msec => {
+    return new Promise(resolve => {
+      setTimeout(resolve, msec)
+    })
+  }
+
+  const make_blob = (canvasEle) => {
+    const blobBin = atob(canvasEle.toDataURL().split(",")[1])
+    const array = []
+    for (let i = 0; i < blobBin.length; i++) {
+      array.push(blobBin.charCodeAt(i))
+    }
+    const file = new Blob([new Uint8Array(array)], { type: "image/png" })
+    return file
+  }
+
+  const telegram_message = (token, chat_id, msg) => {
+    const url = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${msg}`
+    fetch(url)
+  }
+
+  const telegram_photo = (token, chat_id, caption, canvas_id) => {
+    const url = `https://api.telegram.org/bot${token}/sendphoto?chat_id=${chat_id}`
+    const file = make_blob(document.getElementById(canvas_id));
+    const teleData = new FormData()
+    teleData.append("photo", file)
+    teleData.append("caption", caption)
+    fetch(url, {
+      method: "POST",
+      body: teleData
+    })
+  }
+
+  const download_img = () => {
+    const timestamp = new Date().getTime()
+    const date = new Date(timestamp)
+    const month = ("0" + (date.getMonth() + 1)).slice(-2)
+    const day = ("0" + date.getDate()).slice(-2)
+    const hour = ("0" + date.getHours()).slice(-2)
+    const minute = ("0" + date.getMinutes()).slice(-2)
+    const second = ("0" + date.getSeconds()).slice(-2)
+    const data = document.getElementById("viewer").toDataURL("image/png")
+    const link = document.createElement("a")
+    link.download = `${month}${day}${hour}${minute}${second} capture.png`
+    link.href = data
+    link.click()
+  }
+
+  const popup = () => {
+    window.open(window.location.href, "_blank", "width=330; height=600;location=no; menubar=no; status=no; toolbar=no")
+  }
+
+  const send_keys = async (data) => {
+    const keys = data.key
+    const token = data.tele_token
+    const chat_id = data.tele_room
+    for (key of keys.split(" ")) {
+      write(key)
+      if (key == "cap") {
+        download_img()
+      } else if (key.indexOf("noti") >= 0) {
+        const argument = key.slice(key.indexOf("(") + 1, key.indexOf(")"))
+        telegram_message(token, chat_id, argument)
+      } else if (key.indexOf("photo") >= 0) {
+        const argument = key.slice(key.indexOf("(") + 1, key.indexOf(")"))
+        telegram_photo(token, chat_id, argument, "viewer")
+      } else if (key.indexOf("-") >= 0) {
+        const argument = key.slice(1, key.length)
+        await delay(argument * 1000)
+      } else if (data.type == "imgslot" && key == "click") {
+        const click_command = `${target_img_loc[data.name][0]},${target_img_loc[data.name][1]}`
+        if (input_type == "url") {
+          fetch(`${input_url}/${click_command}`)
+        } else if (input_type == "serial") {
+          send_serial(click_command)
+        } else {
+          console.log(`연결된 입력기가 없습니다. ${click_command}`)
+        }
+      }
+      else {
+        send_serial(key)
+      }
+    }
+  }
+
+  const send_serial = (data) => {
+    const dataArrayBuffer = encoder.encode(data);
+    writer.write(dataArrayBuffer);
+  }
+
+  const all_off = () => {
+    Object.keys(run).forEach(name => {
+      run[name] = false
+      document.getElementById(`field_${name}`).style.border = "1px solid lightgray"
+    })
+  }
+
+  const add_single_slot = (name) => {
+    const field = document.createElement("fieldset")
+    field.id = `field_${name}`
+    field.style.border = "1px solid lightgray"
+    field.style.padding = "3px"
+    field.style.width = "315px"
+    field.onclick = () => {
+      run[name] = !run[name]
+      if (run[name] == true) {
+        document.getElementById(`field_${name}`).style.border = "2px solid limegreen"
+      } else {
+        document.getElementById(`field_${name}`).style.border = "1px solid lightgray"
+      }
+    }
+    const legend = document.createElement("legend")
+    legend.innerText = name
+
+    const info = document.createElement("label")
+    info.id = `${name}-info`
+    if (userdata[name]["type"] == "timer") {
+      info.innerText = `KEY : ${userdata[name]["key"]}`
+    } else {
+      info.innerText = `KEY : ${userdata[name]["key"]}\nVALUE: None`
+    }
+
+    field.append(legend)
+    field.append(info)
+    document.body.appendChild(field)
+  }
+
+  const load_json_file = () => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = ".json"
+    input.multiple = true
+    input.onchange = evt => {
+      for (file of evt.target.files) {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const data = JSON.parse(reader.result)
+          console.log(`Add ${data.name}`)
+          userdata[data.name] = data
+          cooling[data.name] = false
+          run[data.name] = false
+          if (data.type == "imgslot") {
+            const im = document.createElement("img")
+            im.onload = () => {
+              target_img[data.name] = cv.imread(im)
+            }
+            im.src = data.src
+          }
+          add_single_slot(data.name)
+        }
+        reader.readAsText(file)
+      }
+    }
+    input.click()
+  }
+
+  let userdata = {}
+  const run = {}
+  const cooling = {}
+  const target_img = {}
+  const target_img_loc = {}
+
+  let writer;
+  const encoder = new TextEncoder();
+
+  const video = document.createElement("video")
+  const img = document.createElement("img")
+  img.crossOrigin = "anonymous"
+  const info = document.getElementById("info")
+  const now = new Date()
+
+  let stream_url = localStorage.getItem("stream_url")
+  let input_url = localStorage.getItem("input_url")
+  let fps = localStorage.getItem("fps")
+  if (fps === null) {
+    console.log("FPS를 기본값 10으로 적용합니다.")
+    fps = 10
+  } else {
+    console.log(`FPS를 ${fps}로 적용합니다.`)
+  }
+
+  const set_fps = () => {
+    const value = prompt("설정할 fps값을 입력하세요.", String(fps))
+    fps = parseInt(value)
+    localStorage.setItem("fps", fps)
+    console.log(`FPS를 ${fps}로 적용합니다.`)
+    write(`FPS를 ${fps}로 적용합니다.`)
+  }
+
+  write("App start")
+  write(`FPS: ${fps}`)
+
+</script>
 <script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="cv_ready()" type="text/javascript"></script>
-<script src="mandlohto.js"></script>
+
 </html>

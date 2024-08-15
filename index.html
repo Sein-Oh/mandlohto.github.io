@@ -14,7 +14,7 @@
     }
 
     button {
-      width: 95px;
+      width: 145px;
       margin: 1px 3px 3px 1px;
     }
 
@@ -30,7 +30,10 @@
   <fieldset style="width:300px">
     <legend>App</legend>
     <div style="display: flex; justify-content:center;">
-      <button class="start" onclick="start_browser()" disabled="true">실행</button>
+      <button class="start" onclick="start_browser()" disabled="true">실행(브라우저)</button>
+      <button class="start" onclick="connect_server()" disabled="true">실행(서버)</button>
+    </div>
+    <div style="display: flex; justify-content:center;">
       <button onclick="set_fps()">FPS설정</button>
       <button onclick="popup()">새창열기</button>
     </div>
@@ -39,8 +42,8 @@
     </div>
     <textarea id="info" readonly="true" rows="4" style="width:300px; resize:none; margin-top:5px"></textarea>
     <div style="display: flex; justify-content:center;">
-      <button style="width:145px" onclick="load_json_file()">슬롯 추가</button>
-      <button style="width:145px" onclick="all_off()">체크 해제</button>
+      <button onclick="load_json_file()">슬롯 추가</button>
+      <button onclick="all_off()">체크 해제</button>
     </div>
   </fieldset>
 </body>
@@ -93,6 +96,8 @@
   }
 
   const start_browser = async () => {
+    mode = "browser"
+    write("Start with browser")
     window.resizeTo(600, 600)
     await start_capture()
     write("Connect to serial")
@@ -100,6 +105,20 @@
     capture_loop()
     timer_loop()
     window.resizeTo(360, 600)
+  }
+
+  const connect_server = () => {
+    mode = "server"
+    stream_url = prompt("스트리밍 URL을 입력하세요.", stream_url)
+    localStorage.setItem("stream_url", stream_url)
+    write(`Stream URL: ${stream_url}`)
+    img.src = stream_url
+
+    input_url = prompt("입력서버 URL을 입력하세요.", input_url)
+    localStorage.setItem("input_url", input_url)
+    write(`Input URL: ${input_url}`)
+    timer_loop()
+    setTimeout(stream_loop, 1000)
   }
 
   const capture_loop = () => {
@@ -217,6 +236,109 @@
     frame.delete()
     setTimeout(capture_loop, 1000 / fps)
   }
+
+  const stream_loop = () => {
+        const frame = cv.imread(img)
+        cv.imshow("viewer", frame)
+
+        for (slot of Object.keys(userdata)) {
+            if (userdata[slot].type == "hpslot") {
+                if (run[slot] == true) {
+                    const x1 = userdata[slot].roi_p1[0]
+                    const y1 = userdata[slot].roi_p1[1]
+                    const x2 = userdata[slot].roi_p2[0]
+                    const y2 = userdata[slot].roi_p2[1]
+                    const thres = userdata[slot].thres
+
+                    const capture_size = userdata[slot].capture_size
+                    let resized_frame = new cv.Mat()
+                    let dsize = new cv.Size(capture_size[0], capture_size[1])
+                    cv.resize(frame, resized_frame, dsize, 0, 0, cv.INTER_AREA)
+
+                    let hpImg = new cv.Mat()
+                    let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+                    hpImg = resized_frame.roi(rect)
+
+                    const hpImgPlanes = new cv.MatVector()
+                    cv.split(hpImg, hpImgPlanes);
+                    const hpRed = hpImgPlanes.get(0)
+
+                    const hpBlur = new cv.Mat()
+                    const ksize = new cv.Size(5, 5)
+                    const anchor = new cv.Point(-1, -1)
+                    cv.blur(hpRed, hpBlur, ksize, anchor, cv.BORDER_DEFAULT)
+
+                    const hpThres = new cv.Mat()
+                    cv.threshold(hpBlur, hpThres, thres, 255, cv.THRESH_BINARY)
+
+                    const hpData1D = []
+                    const hpData2D = []
+                    const hpMaxAry = []
+
+                    hpThres.data.forEach(value => hpData1D.push(value))
+
+                    while (hpData1D.length) hpData2D.push(hpData1D.splice(0, hpThres.size().width))
+
+                    for (i = 0; i < hpData2D.length; i++) {
+                        const idx = hpData2D[i].reverse().indexOf(255)
+                        const value = idx < 0 ? hpImg.size().width : idx
+                        hpMaxAry.push(value)
+                    }
+
+                    const hpMinIdx = Math.min.apply(null, hpMaxAry) < 0 ? 0 : Math.min.apply(null, hpMaxAry)
+                    const hpRatio_ = Math.round((hpThres.size().width - hpMinIdx) / hpThres.size().width * 100)
+                    const hpRatio = hpRatio_ == 0 ? 100 : hpRatio_
+
+                    resized_frame.delete()
+                    hpImg.delete()
+                    hpImgPlanes.delete()
+                    hpRed.delete()
+                    hpBlur.delete()
+                    hpThres.delete()
+
+                    const min_hp = userdata[slot].hp_range[0]
+                    const max_hp = userdata[slot].hp_range[1]
+                    document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"]}\nVALUE: ${hpRatio}`
+
+                    if (hpRatio >= min_hp && hpRatio <= max_hp && cooling[slot] == false) {
+                        cool_run(slot)
+                        send_keys(userdata[slot])
+                    }
+                }
+            }
+
+            if (userdata[slot].type == "imgslot" && run[slot] == true) {
+                const x1 = userdata[slot].roi_p1[0]
+                const y1 = userdata[slot].roi_p1[1]
+                const x2 = userdata[slot].roi_p2[0]
+                const y2 = userdata[slot].roi_p2[1]
+                const thres = userdata[slot].thres
+
+                const capture_size = userdata[slot].capture_size
+                let resized_frame = new cv.Mat()
+                let dsize = new cv.Size(capture_size[0], capture_size[1])
+                cv.resize(frame, resized_frame, dsize, 0, 0, cv.INTER_AREA)
+
+                let croppedImg = new cv.Mat()
+                let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+                croppedImg = resized_frame.roi(rect)
+
+                const result = new cv.Mat()
+                const mask = new cv.Mat()
+                cv.matchTemplate(target_img[slot], croppedImg, result, cv.TM_CCOEFF, mask)
+                const roc = cv.minMaxLoc(result, mask)
+
+                resized_frame.delete()
+                croppedImg.delete()
+                result.delete()
+                mask.delete()
+                document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"]}\nVALUE: ${parseInt(roc.maxVal).toLocaleString()}`
+            }
+        }
+
+        frame.delete()
+        setTimeout(stream_loop, 1000/fps)
+    }
 
   const timer_loop = () => {
     for (slot of Object.keys(userdata)) {
@@ -387,6 +509,7 @@
   }
 
   let userdata = {}
+  let mode = "browser"
   const run = {}
   const cooling = {}
   const target_img = {}

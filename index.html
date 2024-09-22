@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>만들오토ver 240815.03</title>
+  <title>만들오토ver 240922.00</title>
   <link rel="stylesheet" href="https://unpkg.com/7.css">
   <style>
     body {
@@ -213,7 +213,9 @@
 
         const result = new cv.Mat()
         const mask = new cv.Mat()
-        cv.matchTemplate(target_img[slot], croppedImg, result, cv.TM_CCOEFF, mask)
+        // cv.matchTemplate(target_img[slot], croppedImg, result, cv.TM_CCOEFF, mask)
+        cv.matchTemplate(target_img[slot], croppedImg, result, cv.TM_CCOEFF_NORMED, mask)
+
         const roc = cv.minMaxLoc(result, mask)
 
         const center_x = roc.maxLoc.x + parseInt(target_img[slot].cols / 2)
@@ -224,7 +226,7 @@
         croppedImg.delete()
         result.delete()
         mask.delete()
-        document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"]}\nVALUE: ${parseInt(roc.maxVal).toLocaleString()}`
+        document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"]}\nVALUE: ${roc.maxVal.toFixed(2)}`
 
 
         if (roc.maxVal >= thres && cooling[slot] == false) {
@@ -236,7 +238,7 @@
     frame.delete()
     setTimeout(capture_loop, 1000 / fps)
   }
-
+  
   const stream_loop = () => {
         const frame = cv.imread(img)
         cv.imshow("viewer", frame)
@@ -325,14 +327,14 @@
 
                 const result = new cv.Mat()
                 const mask = new cv.Mat()
-                cv.matchTemplate(target_img[slot], croppedImg, result, cv.TM_CCOEFF, mask)
+                cv.matchTemplate(target_img[slot], croppedImg, result, cv.TM_CCOEFF_NORMED, mask)
                 const roc = cv.minMaxLoc(result, mask)
-
+                temp = roc
                 resized_frame.delete()
                 croppedImg.delete()
                 result.delete()
                 mask.delete()
-                document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"]}\nVALUE: ${parseInt(roc.maxVal).toLocaleString()}`
+                document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"]}\nVALUE: ${roc.maxVal.toFixed(2)}`
 
                 if (roc.maxVal >= thres && cooling[slot] == false) {
                   cool_run(slot)

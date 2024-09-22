@@ -103,7 +103,7 @@
     write("Connect to serial")
     await connect_serial()
     capture_loop()
-    timer_loop()
+    // timer_loop()
     window.resizeTo(360, 600)
   }
 
@@ -117,17 +117,27 @@
     input_url = prompt("입력서버 URL을 입력하세요.", input_url)
     localStorage.setItem("input_url", input_url)
     write(`Input URL: ${input_url}`)
-    timer_loop()
+    // timer_loop()
     setTimeout(stream_loop, 1000)
   }
 
   const capture_loop = async () => {
+    console.log("start")
     video.width = video.videoWidth
     video.height = video.videoHeight
     const cap = new cv.VideoCapture(video);
     const frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
     cap.read(frame);
     cv.imshow("viewer", frame)
+
+    for (slot of Object.keys(userdata)) {
+      if (userdata[slot].type == "timer") {
+        if (run[slot] == true && cooling[slot] == false) {
+          await send_keys(userdata[slot])
+          cool_run(slot)
+        }
+      }
+    }
 
     for (slot of Object.keys(userdata)) {
       if (userdata[slot].type == "hpslot") {
@@ -237,11 +247,21 @@
     }
     frame.delete()
     setTimeout(capture_loop, 1000 / fps)
+    console.log("done")
   }
   
   const stream_loop = async () => {
         const frame = cv.imread(img)
         cv.imshow("viewer", frame)
+
+        for (slot of Object.keys(userdata)) {
+          if (userdata[slot].type == "timer") {
+            if (run[slot] == true && cooling[slot] == false) {
+              await send_keys(userdata[slot])
+              cool_run(slot)
+            }
+          }
+        }
 
         for (slot of Object.keys(userdata)) {
             if (userdata[slot].type == "hpslot") {

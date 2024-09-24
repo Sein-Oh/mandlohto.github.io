@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>만들오토ver 240922.01</title>
+  <title>만들오토ver 240924.00</title>
   <link rel="stylesheet" href="https://unpkg.com/7.css">
   <style>
     body {
@@ -42,25 +42,46 @@
     </div>
     <textarea id="info" readonly="true" rows="4" style="width:300px; resize:none; margin-top:5px"></textarea>
     <div style="display: flex; justify-content:center;">
-      <button onclick="load_json_file()">슬롯 추가</button>
-      <button onclick="all_off()">체크 해제</button>
+      <button style="width:90px" onclick="load_json_files()">슬롯 추가</button>
+      <button style="width:90px" onclick="save_to_storage()">저장</button>
+      <button style="width:90px" onclick="remove_data()">초기화</button>
     </div>
   </fieldset>
 </body>
 <script>
+  let userdata = {}
+  let run = {}
+  let cooling = {}
+  let target_img = {}
 
-  const write = (msg) => {
-    let h = now.getHours()
-    let m = now.getMinutes()
-    let s = now.getSeconds()
-    info.value = info.value + "\n" + `[${h}:${m}:${s}] ${msg}`
-    info.scrollTop = info.scrollHeight;
+  let mode = "browser"
+
+  let writer;
+  const encoder = new TextEncoder();
+
+  const video = document.createElement("video")
+  const img = document.createElement("img")
+  img.crossOrigin = "anonymous"
+  const info = document.getElementById("info")
+  const now = new Date()
+
+  let stream_url = localStorage.getItem("stream_url")
+  let input_url = localStorage.getItem("input_url")
+  let fps = localStorage.getItem("fps")
+  if (fps === null) {
+    console.log("FPS를 기본값 10으로 적용합니다.")
+    fps = 10
+  } else {
+    console.log(`FPS를 ${fps}로 적용합니다.`)
   }
 
   const cv_ready = () => {
     write("opencv.js loaded.")
     document.querySelectorAll(".start").forEach(ele => {
       ele.disabled = false
+    })
+    load_from_storage().then(() => {
+      setTimeout(apply_userdata, 1000)
     })
   }
 
@@ -103,7 +124,6 @@
     write("Connect to serial")
     await connect_serial()
     capture_loop()
-    // timer_loop()
     window.resizeTo(360, 600)
   }
 
@@ -117,12 +137,345 @@
     input_url = prompt("입력서버 URL을 입력하세요.", input_url)
     localStorage.setItem("input_url", input_url)
     write(`Input URL: ${input_url}`)
-    // timer_loop()
     setTimeout(stream_loop, 1000)
   }
 
+  const write = (msg) => {
+    let h = now.getHours()
+    let m = now.getMinutes()
+    let s = now.getSeconds()
+    info.value = info.value + "\n" + `[${h}:${m}:${s}] ${msg}`
+    info.scrollTop = info.scrollHeight;
+  }
+
+  write("App start")
+  write(`FPS: ${fps}`)
+
+
+  const load_json = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        try {
+          const json_data = JSON.parse(event.target.result)
+          resolve(json_data)
+        } catch (error) {
+          reject(new Error(".jon parsing failed." + file.name))
+        }
+      }
+      reader.onerror = () => {
+        reject(new Error("File read failed." + file.name))
+      }
+      reader.readAsText(file)
+    })
+  }
+
+
+  const load_json_files = () => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = ".json"
+    input.multiple = true
+    input.onchange = (evt) => {
+      const files = evt.target.files
+      const json_promises = Array.from(files).map(file => load_json(file))
+
+      Promise.all(json_promises).then(file_ary => {
+        file_ary.forEach(file => {
+          userdata[file.name] = file
+        })
+        apply_userdata()
+      })
+    }
+    input.click()
+  }
+
+  const apply_userdata = () => {
+    Object.keys(userdata).forEach(key => {
+      cooling[key] = false
+      run[key] = false
+      if (userdata[key].type == "imgslot") {
+        const im = document.createElement("img")
+        im.onload = () => {
+          target_img[key] = cv.imread(im)
+        }
+        im.src = userdata[key].src
+      }
+
+      const field = document.createElement("fieldset")
+      field.className = "slot"
+      field.id = `field_${key}`
+      field.style.border = "1px solid lightgray"
+      field.style.padding = "3px"
+      field.style.width = "315px"
+      field.onclick = () => {
+        run[key] = !run[key]
+        const elem = document.getElementById(`field_${key}`)
+        if (run[key] == true) {
+          elem.style.border = "2px solid limegreen"
+        } else {
+          elem.style.border = "1px solid lightgray"
+        }
+      }
+      const legend = document.createElement("legend")
+      legend.innerText = key
+
+      const info = document.createElement("label")
+      info.id = `${key}-info`
+      if (userdata[key]["type"] == "timer") {
+        info.innerText = `KEY : ${userdata[key]["key"].slice(0,45)}`
+      } else {
+        info.innerText = `KEY : ${userdata[key]["key"].slice(0,45)}\nVALUE:`
+      }
+
+      field.append(legend)
+      field.append(info)
+      document.body.appendChild(field)
+    })
+  }
+
+  const send_serial = (data) => {
+    const dataArrayBuffer = encoder.encode(data);
+    writer.write(dataArrayBuffer);
+  }
+
+  const remove_data = () => {
+    userdata = {}
+    run = {}
+    cooling = {}
+    target_img = {}
+
+    document.querySelectorAll(".slot").forEach(slot => {
+      slot.remove()
+    })
+  }
+
+  const all_off = () => {
+    Object.keys(run).forEach(name => {
+      run[name] = false
+      document.getElementById(`field_${name}`).style.border = "1px solid lightgray"
+    })
+  }
+
+
+  const load_from_storage = async () => {
+    userdata = JSON.parse(localStorage.getItem("userdata"))
+  }
+
+  const save_to_storage = () => {
+    localStorage.setItem("userdata", JSON.stringify(userdata))
+  }
+
+  const set_fps = () => {
+    const value = prompt("설정할 fps값을 입력하세요.", String(fps))
+    fps = parseInt(value)
+    localStorage.setItem("fps", fps)
+    console.log(`FPS를 ${fps}로 적용합니다.`)
+    write(`FPS를 ${fps}로 적용합니다.`)
+  }
+
+  const delay = msec => {
+    return new Promise(resolve => {
+      setTimeout(resolve, msec)
+    })
+  }
+
+  const make_blob = (canvasEle) => {
+    const blobBin = atob(canvasEle.toDataURL().split(",")[1])
+    const array = []
+    for (let i = 0; i < blobBin.length; i++) {
+      array.push(blobBin.charCodeAt(i))
+    }
+    const file = new Blob([new Uint8Array(array)], { type: "image/png" })
+    return file
+  }
+
+  const telegram_message = (token, chat_id, msg) => {
+    const url = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${msg}`
+    fetch(url)
+  }
+
+  const telegram_photo = (token, chat_id, caption, canvas_id) => {
+    const url = `https://api.telegram.org/bot${token}/sendphoto?chat_id=${chat_id}`
+    const file = make_blob(document.getElementById(canvas_id));
+    const teleData = new FormData()
+    teleData.append("photo", file)
+    teleData.append("caption", caption)
+    fetch(url, {
+      method: "POST",
+      body: teleData
+    })
+  }
+
+  const download_img = () => {
+    const timestamp = new Date().getTime()
+    const date = new Date(timestamp)
+    const month = ("0" + (date.getMonth() + 1)).slice(-2)
+    const day = ("0" + date.getDate()).slice(-2)
+    const hour = ("0" + date.getHours()).slice(-2)
+    const minute = ("0" + date.getMinutes()).slice(-2)
+    const second = ("0" + date.getSeconds()).slice(-2)
+    const data = document.getElementById("viewer").toDataURL("image/png")
+    const link = document.createElement("a")
+    link.download = `${month}${day}${hour}${minute}${second} capture.png`
+    link.href = data
+    link.click()
+  }
+
+  const popup = () => {
+    window.open(window.location.href, "_blank", "width=330; height=600;location=no; menubar=no; status=no; toolbar=no")
+  }
+
+  const send_keys = async (data) => {
+    const keys = data.key
+    const token = data.tele_token
+    const chat_id = data.tele_room
+    for (key of keys.split(" ")) {
+      write(key)
+      if (key == "cap") {
+        download_img()
+      } else if (key.indexOf("noti") >= 0) {
+        const argument = key.slice(key.indexOf("(") + 1, key.indexOf(")"))
+        telegram_message(token, chat_id, argument)
+      } else if (key.indexOf("photo") >= 0) {
+        const argument = key.slice(key.indexOf("(") + 1, key.indexOf(")"))
+        telegram_photo(token, chat_id, argument, "viewer")
+      } else if (key.indexOf("-") >= 0) {
+        const argument = key.slice(1, key.length)
+        await delay(argument * 1000)
+      }
+      else {
+        if (mode == "browser") {
+          send_serial(key)
+        }
+        else if (mode == "server") {
+          fetch(`${input_url}/${key}`)
+        }
+        else {
+          console.log(`연결된 입력기가 없습니다. ${key}`)
+        }
+      }
+    }
+  }
+
+  const stream_loop = async () => {
+    const frame = cv.imread(img)
+    cv.imshow("viewer", frame)
+
+    for (slot of Object.keys(userdata)) {
+      if (userdata[slot].type == "timer") {
+        if (run[slot] == true && cooling[slot] == false) {
+          await send_keys(userdata[slot])
+          cool_run(slot)
+        }
+      }
+    }
+
+    for (slot of Object.keys(userdata)) {
+      if (userdata[slot].type == "hpslot") {
+        if (run[slot] == true) {
+          const x1 = userdata[slot].roi_p1[0]
+          const y1 = userdata[slot].roi_p1[1]
+          const x2 = userdata[slot].roi_p2[0]
+          const y2 = userdata[slot].roi_p2[1]
+          const thres = userdata[slot].thres
+
+          const capture_size = userdata[slot].capture_size
+          let resized_frame = new cv.Mat()
+          let dsize = new cv.Size(capture_size[0], capture_size[1])
+          cv.resize(frame, resized_frame, dsize, 0, 0, cv.INTER_AREA)
+
+          let hpImg = new cv.Mat()
+          let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+          hpImg = resized_frame.roi(rect)
+
+          const hpImgPlanes = new cv.MatVector()
+          cv.split(hpImg, hpImgPlanes);
+          const hpRed = hpImgPlanes.get(0)
+
+          const hpBlur = new cv.Mat()
+          const ksize = new cv.Size(5, 5)
+          const anchor = new cv.Point(-1, -1)
+          cv.blur(hpRed, hpBlur, ksize, anchor, cv.BORDER_DEFAULT)
+
+          const hpThres = new cv.Mat()
+          cv.threshold(hpBlur, hpThres, thres, 255, cv.THRESH_BINARY)
+
+          const hpData1D = []
+          const hpData2D = []
+          const hpMaxAry = []
+
+          hpThres.data.forEach(value => hpData1D.push(value))
+
+          while (hpData1D.length) hpData2D.push(hpData1D.splice(0, hpThres.size().width))
+
+          for (i = 0; i < hpData2D.length; i++) {
+            const idx = hpData2D[i].reverse().indexOf(255)
+            const value = idx < 0 ? hpImg.size().width : idx
+            hpMaxAry.push(value)
+          }
+
+          const hpMinIdx = Math.min.apply(null, hpMaxAry) < 0 ? 0 : Math.min.apply(null, hpMaxAry)
+          const hpRatio_ = Math.round((hpThres.size().width - hpMinIdx) / hpThres.size().width * 100)
+          const hpRatio = hpRatio_ == 0 ? 100 : hpRatio_
+
+          resized_frame.delete()
+          hpImg.delete()
+          hpImgPlanes.delete()
+          hpRed.delete()
+          hpBlur.delete()
+          hpThres.delete()
+
+          const min_hp = userdata[slot].hp_range[0]
+          const max_hp = userdata[slot].hp_range[1]
+          document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"].slice(0,45)}\nVALUE: ${hpRatio}`
+
+          if (hpRatio >= min_hp && hpRatio <= max_hp && cooling[slot] == false) {
+            await send_keys(userdata[slot])
+            cool_run(slot)
+          }
+        }
+      }
+
+      if (userdata[slot].type == "imgslot" && run[slot] == true) {
+        const x1 = userdata[slot].roi_p1[0]
+        const y1 = userdata[slot].roi_p1[1]
+        const x2 = userdata[slot].roi_p2[0]
+        const y2 = userdata[slot].roi_p2[1]
+        const thres = userdata[slot].thres
+
+        const capture_size = userdata[slot].capture_size
+        let resized_frame = new cv.Mat()
+        let dsize = new cv.Size(capture_size[0], capture_size[1])
+        cv.resize(frame, resized_frame, dsize, 0, 0, cv.INTER_AREA)
+
+        let croppedImg = new cv.Mat()
+        let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+        croppedImg = resized_frame.roi(rect)
+
+        const result = new cv.Mat()
+        const mask = new cv.Mat()
+        cv.matchTemplate(target_img[slot], croppedImg, result, cv.TM_CCOEFF_NORMED, mask)
+        const roc = cv.minMaxLoc(result, mask)
+        temp = roc
+        resized_frame.delete()
+        croppedImg.delete()
+        result.delete()
+        mask.delete()
+        document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"].slice(0,45)}\nVALUE: ${roc.maxVal.toFixed(2)}`
+
+        if (roc.maxVal >= thres && cooling[slot] == false) {
+          await send_keys(userdata[slot])
+          cool_run(slot)
+        }
+      }
+    }
+
+    frame.delete()
+    setTimeout(stream_loop, 1000 / fps)
+  }
+
   const capture_loop = async () => {
-    console.log("start")
     video.width = video.videoWidth
     video.height = video.videoHeight
     const cap = new cv.VideoCapture(video);
@@ -196,7 +549,7 @@
 
           const min_hp = userdata[slot].hp_range[0]
           const max_hp = userdata[slot].hp_range[1]
-          document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"]}\nVALUE: ${hpRatio}`
+          document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"].slice(0,45)}\nVALUE: ${hpRatio}`
 
           if (hpRatio >= min_hp && hpRatio <= max_hp && cooling[slot] == false) {
             await send_keys(userdata[slot])
@@ -230,13 +583,12 @@
 
         const center_x = roc.maxLoc.x + parseInt(target_img[slot].cols / 2)
         const center_y = roc.maxLoc.y + parseInt(target_img[slot].rows / 2)
-        target_img_loc[slot] = [center_x, center_y]
 
         resized_frame.delete()
         croppedImg.delete()
         result.delete()
         mask.delete()
-        document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"]}\nVALUE: ${roc.maxVal.toFixed(2)}`
+        document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"].slice(0,45)}\nVALUE: ${roc.maxVal.toFixed(2)}`
 
 
         if (roc.maxVal >= thres && cooling[slot] == false) {
@@ -247,338 +599,7 @@
     }
     frame.delete()
     setTimeout(capture_loop, 1000 / fps)
-    console.log("done")
   }
-  
-  const stream_loop = async () => {
-        const frame = cv.imread(img)
-        cv.imshow("viewer", frame)
-
-        for (slot of Object.keys(userdata)) {
-          if (userdata[slot].type == "timer") {
-            if (run[slot] == true && cooling[slot] == false) {
-              await send_keys(userdata[slot])
-              cool_run(slot)
-            }
-          }
-        }
-
-        for (slot of Object.keys(userdata)) {
-            if (userdata[slot].type == "hpslot") {
-                if (run[slot] == true) {
-                    const x1 = userdata[slot].roi_p1[0]
-                    const y1 = userdata[slot].roi_p1[1]
-                    const x2 = userdata[slot].roi_p2[0]
-                    const y2 = userdata[slot].roi_p2[1]
-                    const thres = userdata[slot].thres
-
-                    const capture_size = userdata[slot].capture_size
-                    let resized_frame = new cv.Mat()
-                    let dsize = new cv.Size(capture_size[0], capture_size[1])
-                    cv.resize(frame, resized_frame, dsize, 0, 0, cv.INTER_AREA)
-
-                    let hpImg = new cv.Mat()
-                    let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
-                    hpImg = resized_frame.roi(rect)
-
-                    const hpImgPlanes = new cv.MatVector()
-                    cv.split(hpImg, hpImgPlanes);
-                    const hpRed = hpImgPlanes.get(0)
-
-                    const hpBlur = new cv.Mat()
-                    const ksize = new cv.Size(5, 5)
-                    const anchor = new cv.Point(-1, -1)
-                    cv.blur(hpRed, hpBlur, ksize, anchor, cv.BORDER_DEFAULT)
-
-                    const hpThres = new cv.Mat()
-                    cv.threshold(hpBlur, hpThres, thres, 255, cv.THRESH_BINARY)
-
-                    const hpData1D = []
-                    const hpData2D = []
-                    const hpMaxAry = []
-
-                    hpThres.data.forEach(value => hpData1D.push(value))
-
-                    while (hpData1D.length) hpData2D.push(hpData1D.splice(0, hpThres.size().width))
-
-                    for (i = 0; i < hpData2D.length; i++) {
-                        const idx = hpData2D[i].reverse().indexOf(255)
-                        const value = idx < 0 ? hpImg.size().width : idx
-                        hpMaxAry.push(value)
-                    }
-
-                    const hpMinIdx = Math.min.apply(null, hpMaxAry) < 0 ? 0 : Math.min.apply(null, hpMaxAry)
-                    const hpRatio_ = Math.round((hpThres.size().width - hpMinIdx) / hpThres.size().width * 100)
-                    const hpRatio = hpRatio_ == 0 ? 100 : hpRatio_
-
-                    resized_frame.delete()
-                    hpImg.delete()
-                    hpImgPlanes.delete()
-                    hpRed.delete()
-                    hpBlur.delete()
-                    hpThres.delete()
-
-                    const min_hp = userdata[slot].hp_range[0]
-                    const max_hp = userdata[slot].hp_range[1]
-                    document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"]}\nVALUE: ${hpRatio}`
-
-                    if (hpRatio >= min_hp && hpRatio <= max_hp && cooling[slot] == false) {
-                        await send_keys(userdata[slot])
-                        cool_run(slot)
-                    }
-                }
-            }
-
-            if (userdata[slot].type == "imgslot" && run[slot] == true) {
-                const x1 = userdata[slot].roi_p1[0]
-                const y1 = userdata[slot].roi_p1[1]
-                const x2 = userdata[slot].roi_p2[0]
-                const y2 = userdata[slot].roi_p2[1]
-                const thres = userdata[slot].thres
-
-                const capture_size = userdata[slot].capture_size
-                let resized_frame = new cv.Mat()
-                let dsize = new cv.Size(capture_size[0], capture_size[1])
-                cv.resize(frame, resized_frame, dsize, 0, 0, cv.INTER_AREA)
-
-                let croppedImg = new cv.Mat()
-                let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
-                croppedImg = resized_frame.roi(rect)
-
-                const result = new cv.Mat()
-                const mask = new cv.Mat()
-                cv.matchTemplate(target_img[slot], croppedImg, result, cv.TM_CCOEFF_NORMED, mask)
-                const roc = cv.minMaxLoc(result, mask)
-                temp = roc
-                resized_frame.delete()
-                croppedImg.delete()
-                result.delete()
-                mask.delete()
-                document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata[slot]["key"]}\nVALUE: ${roc.maxVal.toFixed(2)}`
-
-                if (roc.maxVal >= thres && cooling[slot] == false) {
-                  await send_keys(userdata[slot])
-                  cool_run(slot)
-                }
-            }
-        }
-
-        frame.delete()
-        setTimeout(stream_loop, 1000/fps)
-    }
-
-  const timer_loop = async () => {
-    for (slot of Object.keys(userdata)) {
-      if (userdata[slot].type == "timer") {
-        if (run[slot] == true && cooling[slot] == false) {
-          await send_keys(userdata[slot])
-          cool_run(slot)
-        }
-      }
-    }
-    setTimeout(timer_loop, 1000 / fps)
-  }
-
-  const delay = msec => {
-    return new Promise(resolve => {
-      setTimeout(resolve, msec)
-    })
-  }
-
-  const make_blob = (canvasEle) => {
-    const blobBin = atob(canvasEle.toDataURL().split(",")[1])
-    const array = []
-    for (let i = 0; i < blobBin.length; i++) {
-      array.push(blobBin.charCodeAt(i))
-    }
-    const file = new Blob([new Uint8Array(array)], { type: "image/png" })
-    return file
-  }
-
-  const telegram_message = (token, chat_id, msg) => {
-    const url = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${msg}`
-    fetch(url)
-  }
-
-  const telegram_photo = (token, chat_id, caption, canvas_id) => {
-    const url = `https://api.telegram.org/bot${token}/sendphoto?chat_id=${chat_id}`
-    const file = make_blob(document.getElementById(canvas_id));
-    const teleData = new FormData()
-    teleData.append("photo", file)
-    teleData.append("caption", caption)
-    fetch(url, {
-      method: "POST",
-      body: teleData
-    })
-  }
-
-  const download_img = () => {
-    const timestamp = new Date().getTime()
-    const date = new Date(timestamp)
-    const month = ("0" + (date.getMonth() + 1)).slice(-2)
-    const day = ("0" + date.getDate()).slice(-2)
-    const hour = ("0" + date.getHours()).slice(-2)
-    const minute = ("0" + date.getMinutes()).slice(-2)
-    const second = ("0" + date.getSeconds()).slice(-2)
-    const data = document.getElementById("viewer").toDataURL("image/png")
-    const link = document.createElement("a")
-    link.download = `${month}${day}${hour}${minute}${second} capture.png`
-    link.href = data
-    link.click()
-  }
-
-  const popup = () => {
-    window.open(window.location.href, "_blank", "width=330; height=600;location=no; menubar=no; status=no; toolbar=no")
-  }
-
-  const send_keys = async (data) => {
-    const keys = data.key
-    const token = data.tele_token
-    const chat_id = data.tele_room
-    for (key of keys.split(" ")) {
-      write(key)
-      if (key == "cap") {
-        download_img()
-      } else if (key.indexOf("noti") >= 0) {
-        const argument = key.slice(key.indexOf("(") + 1, key.indexOf(")"))
-        telegram_message(token, chat_id, argument)
-      } else if (key.indexOf("photo") >= 0) {
-        const argument = key.slice(key.indexOf("(") + 1, key.indexOf(")"))
-        telegram_photo(token, chat_id, argument, "viewer")
-      } else if (key.indexOf("-") >= 0) {
-        const argument = key.slice(1, key.length)
-        await delay(argument * 1000)
-      } else if (data.type == "imgslot" && key == "click") {
-        const click_command = `${target_img_loc[data.name][0]},${target_img_loc[data.name][1]}`
-        if (input_type == "url") {
-          fetch(`${input_url}/${click_command}`)
-        } else if (input_type == "serial") {
-          send_serial(click_command)
-        } else {
-          console.log(`연결된 입력기가 없습니다. ${click_command}`)
-        }
-      }
-      else {
-        if (mode == "browser") {
-          send_serial(key)
-        }
-        else if (mode == "server") {
-          fetch(`${input_url}/${key}`)
-        }
-        else {
-          console.log(`연결된 입력기가 없습니다. ${key}`)
-        }
-      }
-    }
-  }
-
-  const send_serial = (data) => {
-    const dataArrayBuffer = encoder.encode(data);
-    writer.write(dataArrayBuffer);
-  }
-
-  const all_off = () => {
-    Object.keys(run).forEach(name => {
-      run[name] = false
-      document.getElementById(`field_${name}`).style.border = "1px solid lightgray"
-    })
-  }
-
-  const add_single_slot = (name) => {
-    const field = document.createElement("fieldset")
-    field.id = `field_${name}`
-    field.style.border = "1px solid lightgray"
-    field.style.padding = "3px"
-    field.style.width = "315px"
-    field.onclick = () => {
-      run[name] = !run[name]
-      if (run[name] == true) {
-        document.getElementById(`field_${name}`).style.border = "2px solid limegreen"
-      } else {
-        document.getElementById(`field_${name}`).style.border = "1px solid lightgray"
-      }
-    }
-    const legend = document.createElement("legend")
-    legend.innerText = name
-
-    const info = document.createElement("label")
-    info.id = `${name}-info`
-    if (userdata[name]["type"] == "timer") {
-      info.innerText = `KEY : ${userdata[name]["key"]}`
-    } else {
-      info.innerText = `KEY : ${userdata[name]["key"]}\nVALUE: None`
-    }
-
-    field.append(legend)
-    field.append(info)
-    document.body.appendChild(field)
-  }
-
-  const load_json_file = () => {
-    const input = document.createElement("input")
-    input.type = "file"
-    input.accept = ".json"
-    input.multiple = true
-    input.onchange = evt => {
-      for (file of evt.target.files) {
-        const reader = new FileReader()
-        reader.onload = () => {
-          const data = JSON.parse(reader.result)
-          console.log(`Add ${data.name}`)
-          userdata[data.name] = data
-          cooling[data.name] = false
-          run[data.name] = false
-          if (data.type == "imgslot") {
-            const im = document.createElement("img")
-            im.onload = () => {
-              target_img[data.name] = cv.imread(im)
-            }
-            im.src = data.src
-          }
-          add_single_slot(data.name)
-        }
-        reader.readAsText(file)
-      }
-    }
-    input.click()
-  }
-
-  let userdata = {}
-  let mode = "browser"
-  const run = {}
-  const cooling = {}
-  const target_img = {}
-  const target_img_loc = {}
-
-  let writer;
-  const encoder = new TextEncoder();
-
-  const video = document.createElement("video")
-  const img = document.createElement("img")
-  img.crossOrigin = "anonymous"
-  const info = document.getElementById("info")
-  const now = new Date()
-
-  let stream_url = localStorage.getItem("stream_url")
-  let input_url = localStorage.getItem("input_url")
-  let fps = localStorage.getItem("fps")
-  if (fps === null) {
-    console.log("FPS를 기본값 10으로 적용합니다.")
-    fps = 10
-  } else {
-    console.log(`FPS를 ${fps}로 적용합니다.`)
-  }
-
-  const set_fps = () => {
-    const value = prompt("설정할 fps값을 입력하세요.", String(fps))
-    fps = parseInt(value)
-    localStorage.setItem("fps", fps)
-    console.log(`FPS를 ${fps}로 적용합니다.`)
-    write(`FPS를 ${fps}로 적용합니다.`)
-  }
-
-  write("App start")
-  write(`FPS: ${fps}`)
 
 </script>
 <script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="cv_ready()" type="text/javascript"></script>

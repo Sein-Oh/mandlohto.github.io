@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>만들오토ver 240924.00</title>
+  <title>만들오토ver 240924.01</title>
   <link rel="stylesheet" href="https://unpkg.com/7.css">
   <style>
     body {
@@ -260,6 +260,9 @@
 
   const load_from_storage = async () => {
     userdata = JSON.parse(localStorage.getItem("userdata"))
+    if (userdata == null) {
+      userdata = {}
+    }
   }
 
   const save_to_storage = () => {

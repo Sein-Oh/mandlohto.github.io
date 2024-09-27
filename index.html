@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>만들오토ver 240924.01</title>
+  <title>만들오토ver 240927.00</title>
   <link rel="stylesheet" href="https://unpkg.com/7.css">
   <style>
     body {
@@ -14,7 +14,7 @@
     }
 
     button {
-      width: 145px;
+      width: 96px;
       margin: 1px 3px 3px 1px;
     }
 
@@ -30,21 +30,23 @@
   <fieldset style="width:300px">
     <legend>App</legend>
     <div style="display: flex; justify-content:center;">
-      <button class="start" onclick="start_browser()" disabled="true">실행(브라우저)</button>
+      <button class="start" onclick="start_browser()" disabled="true">실행(웹)</button>
       <button class="start" onclick="connect_server()" disabled="true">실행(서버)</button>
+      <button onclick="popup()">새창열기</button>
     </div>
     <div style="display: flex; justify-content:center;">
       <button onclick="set_fps()">FPS설정</button>
-      <button onclick="popup()">새창열기</button>
+      <button onclick="download_img()">캡처 저장</button>
+      <button onclick="window.open('https://mandloh.tistory.com/147')">블로그</button>
     </div>
     <div style="width:300px; height:auto; border:1px solid lightgray; overflow:auto;">
       <canvas id="viewer" style="width:300px; display:inline-block"></canvas>
     </div>
     <textarea id="info" readonly="true" rows="4" style="width:300px; resize:none; margin-top:5px"></textarea>
     <div style="display: flex; justify-content:center;">
-      <button style="width:90px" onclick="load_json_files()">슬롯 추가</button>
-      <button style="width:90px" onclick="save_to_storage()">저장</button>
-      <button style="width:90px" onclick="remove_data()">초기화</button>
+      <button onclick="load_json_files()">슬롯 추가</button>
+      <button onclick="save_to_storage()">저장</button>
+      <button onclick="remove_data()">초기화</button>
     </div>
   </fieldset>
 </body>
@@ -190,18 +192,25 @@
     input.click()
   }
 
-  const apply_userdata = () => {
-    Object.keys(userdata).forEach(key => {
-      cooling[key] = false
-      run[key] = false
-      if (userdata[key].type == "imgslot") {
-        const im = document.createElement("img")
-        im.onload = () => {
-          target_img[key] = cv.imread(im)
+  const load_images = (userdata, target_img) => {
+    const promises = Object.keys(userdata).map(key => {
+      return new Promise((resolve) => {
+        cooling[key] = false
+        run[key] = false
+        if (userdata[key].type == "imgslot") {
+          const im = new Image()
+          im.onload = () => {
+            target_img[key] = cv.imread(im)
+            resolve()
+          }
+          im.src = userdata[key].src
         }
-        im.src = userdata[key].src
-      }
+      })
+    })
+  }
 
+  const add_slot = () => {
+    Object.keys(userdata).forEach(key => {
       const field = document.createElement("fieldset")
       field.className = "slot"
       field.id = `field_${key}`
@@ -231,6 +240,32 @@
       field.append(legend)
       field.append(info)
       document.body.appendChild(field)
+    })
+  }
+
+
+  const apply_userdata = () => {
+    const promises = Object.keys(userdata).map(key => {
+      return new Promise((resolve) => {
+        cooling[key] = false
+        run[key] = false
+        if (userdata[key].type == "imgslot") {
+          const im = new Image()
+          im.onload = () => {
+            target_img[key] = cv.imread(im)
+            resolve()
+            console.log(key)
+          }
+          im.src = userdata[key].src
+        } else {
+          resolve()
+        }
+      })
+    })
+
+    Promise.all(promises).then(() => {
+      console.log("All image converted to Mat.")
+      add_slot()
     })
   }
 

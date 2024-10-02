@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>만들오토ver 241001.01</title>
+  <title>만들오토ver 241002.01</title>
   <link rel="stylesheet" href="https://unpkg.com/7.css">
   <style>
     body {
@@ -58,6 +58,8 @@
 
   let stream_url = ""
   let input_url = ""
+  let token = ""
+  let chat_id = ""
 
   let fps = localStorage.getItem("fps")
   if (fps === null) {
@@ -94,6 +96,8 @@
       stream_url = userdata.stream_url
       img.src = stream_url
       input_url = userdata.input_url
+      token = userdata.telegram_token
+      chat_id = userdata.telegram_room
       let promises = []
       if (userdata.hasOwnProperty("timer") == true) {
         Object.keys(userdata.timer).forEach(name => {
@@ -289,14 +293,13 @@
     link.click()
   }
 
-  const popup = () => {
+  const popup = () => {111
     window.open(window.location.href, "_blank", "width=330; height=600;location=no; menubar=no; status=no; toolbar=no")
   }
 
   const send_keys = async (data) => {
+    console.log(data)
     const keys = data.key
-    const token = userdata.telegram_token
-    const chat_id = userdata.telegram_room
     for (key of keys.split(" ")) {
       write(key)
       if (key == "cap") {
@@ -322,16 +325,16 @@
     cv.imshow("viewer", frame)
 
     if (userdata.hasOwnProperty("timer") == true) {
-      Object.keys(userdata.timer).forEach(async slot => {
+      for (slot of Object.keys(userdata.timer)) {
         if (run[slot] == true && cooling[slot] == false) {
           await send_keys(userdata.timer[slot])
           cool_run(slot, "timer")
         }
-      })
+      }
     }
 
     if (userdata.hasOwnProperty("hpslot") == true) {
-      Object.keys(userdata.hpslot).forEach(async slot => {
+      for (slot of Object.keys(userdata.hpslot)) {
         if (run[slot] == true) {
           const x1 = userdata.hpslot[slot].roi_p1[0]
           const y1 = userdata.hpslot[slot].roi_p1[1]
@@ -389,11 +392,11 @@
             cool_run(slot, "hpslot")
           }
         }
-      })
+      }
     }
 
     if (userdata.hasOwnProperty("imgslot") == true) {
-      Object.keys(userdata.imgslot).forEach(async slot => {
+      for (slot of Object.keys(userdata.imgslot)) {
         if (run[slot] == true) {
           const x1 = userdata.imgslot[slot].roi_p1[0]
           const y1 = userdata.imgslot[slot].roi_p1[1]
@@ -420,7 +423,7 @@
             cool_run(slot, "imgslot")
           }
         }
-      })
+      }
     }
     setTimeout(stream_loop, 1000 / fps)
     frame.delete()

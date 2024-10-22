@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>만들오토ver 241002.01</title>
+  <title>만들오토ver 24.10.22-r0</title>
   <link rel="stylesheet" href="https://unpkg.com/7.css">
   <style>
     body {
@@ -14,7 +14,7 @@
     }
 
     button {
-      width: 96px;
+      width: 148px;
       margin: 1px 3px 3px 1px;
     }
 
@@ -32,15 +32,18 @@
     <div style="display: flex; justify-content:center;">
       <button onclick="popup()">새창열기</button>
       <button onclick="set_fps()">FPS설정</button>
+    </div>
+    <div style="display: flex; justify-content:center;">
       <button onclick="download_img()">캡처 저장</button>
+      <button onclick="start()">파일 불러오기</button>
     </div>
     <div style="width:300px; height:auto; border:1px solid lightgray; overflow:auto;">
       <canvas id="viewer" style="width:300px; display:inline-block"></canvas>
     </div>
     <textarea id="info" readonly="true" rows="4" style="width:300px; resize:none; margin-top:5px"></textarea>
     <div style="display: flex; justify-content:center;">
-      <button style="width:145px" onclick="start()">파일 불러오기</button>
-      <button style="width:145px" onclick="all_off()">슬롯 전부해제</button>
+      <button onclick="all_off()">체크 해제</button>
+      <button onclick="re_check()">다시 체크</button>
     </div>
   </fieldset>
 </body>
@@ -54,7 +57,6 @@
   const img = document.createElement("img")
   img.crossOrigin = "anonymous"
   const info = document.getElementById("info")
-  const now = new Date()
 
   let stream_url = ""
   let input_url = ""
@@ -80,9 +82,10 @@
   }
 
   const write = (msg) => {
-    let h = now.getHours()
-    let m = now.getMinutes()
-    let s = now.getSeconds()
+    const now = new Date()
+    const h = now.getHours()
+    const m = now.getMinutes()
+    const s = now.getSeconds()
     info.value = info.value + "\n" + `[${h}:${m}:${s}] ${msg}`
     info.scrollTop = info.scrollHeight;
   }
@@ -214,11 +217,23 @@
       slot.remove()
     })
   }
-
+  let preset;
   const all_off = () => {
+    preset = JSON.parse(JSON.stringify(run))
     Object.keys(run).forEach(name => {
       run[name] = false
       document.getElementById(`field_${name}`).style.border = "1px solid lightgray"
+    })
+  }
+
+  const re_check = () => {
+    Object.keys(run).forEach(name => {
+      run[name] = preset[name]
+      if (run[name] == true) {
+      document.getElementById(`field_${name}`).style.border = "2px solid limegreen"
+      } else {
+      document.getElementById(`field_${name}`).style.border = "1px solid lightgray"
+      }
     })
   }
 

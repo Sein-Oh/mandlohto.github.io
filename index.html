@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>만들오토ver 24.10.22-r2</title>
+  <title>만들오토ver 24.10.22-r3</title>
   <link rel="stylesheet" href="https://unpkg.com/7.css">
   <style>
     body {
@@ -432,7 +432,7 @@
 
           if (roc.maxVal >= thres && cooling[slot] == false) {
             const mean_value = cv.mean(croppedImg)
-            const sum_value = mean_value((sum, curr_value) => {
+            const sum_value = mean_value.reduce((sum, curr_value) => {
               return sum + curr_value
             })
             const avg_value = parseInt(sum_value / 4)

@@ -428,15 +428,21 @@
           cv.matchTemplate(target_img[slot], croppedImg, result, cv.TM_CCOEFF_NORMED, mask)
           const roc = cv.minMaxLoc(result, mask)
 
-          croppedImg.delete()
-          result.delete()
-          mask.delete()
           document.getElementById(`${slot}-info`).innerText = `KEY : ${userdata.imgslot[slot]["key"].slice(0, 45)}\nVALUE: ${roc.maxVal.toFixed(2)}`
 
           if (roc.maxVal >= thres && cooling[slot] == false) {
+            const mean_value = cv.mean(croppedImg)
+            const sum_value = mean_value((sum, curr_value) => {
+              return sum + curr_value
+            })
+            const avg_value = parseInt(sum_value / 4)
+            write(avg_value)
             cool_run(slot, "imgslot")
             await send_keys(userdata.imgslot[slot])
           }
+          croppedImg.delete()
+          result.delete()
+          mask.delete()
         }
       }
     }

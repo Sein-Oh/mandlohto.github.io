@@ -2,7 +2,7 @@
 <html lang="ko-KR">
 
 <head>
-    <title>MandlAuto 25.01.19 v0.1</title>
+    <title>MandlAuto 25.01.20 v0.1</title>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="https://unpkg.com/xp.css" />
     <style>
@@ -25,6 +25,10 @@
 
         summary {
             margin: 3px;
+            background-color: lightgray
+        }
+        summary:hover {
+            background-color: gray;
         }
 
         button {
@@ -44,7 +48,7 @@
             <!-- <button style="width:100px" class="menu" disabled="true">설정 불러오기</button> -->
         </div>
         <details>
-            <summary style="background-color: whitesmoke;">자세히</summary>
+            <summary>자세히</summary>
             <div style="width:300px; height:auto; border:1px solid whitesmoke; overflow:auto;">
                 <canvas id="viewer" style="width:300px; display:inline-block"></canvas>
             </div>
@@ -54,15 +58,11 @@
             <label style="width:20%">입력 URL</label>
             <input type="text" id="inputURL" style="width:75%;">
             <br>
-            <label style="width:20%">입력테스트</label>
-            <input type="text" id="inputTest" onclick="input_test()" onmouseleave="input_out()" style="width:75%;"
-                placeholder="클릭하여 입력 테스트">
-            <br>
             <label style="width:20%">목표 FPS</label>
             <input type="text" id="targetFPS" style="width:75%;">
             <br>
-            <label style="width:20%">실행 FPS</label>
-            <input type="text" id="resultFPS" style="width:75%;" readonly="true">
+            <label style="width:20%">지연시간(ms)</label>
+            <input type="text" id="latency" style="width:75%;" readonly="true">
             <br>
             <label style="width:30%">텔레그램 토큰</label>
             <input type="text" id="teleToken" style="width:65%;">
@@ -100,7 +100,7 @@
             <label for="hpslot4">슬롯4</label>
         </div>
         <details>
-            <summary style="background-color: whitesmoke;">자세히</summary>
+            <summary>자세히</summary>
             <fieldset>
                 <legend>캡처</legend>
                 <label class="subtitle">캡처영역</label>
@@ -123,6 +123,7 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="hpslot1_cool">
+                <input type="text" onclick="input_test('hpslot1')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
             </fieldset>
             <fieldset>
                 <legend>HP슬롯2</legend>
@@ -135,6 +136,7 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="hpslot2_cool">
+                <input type="text" onclick="input_test('hpslot2')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
             </fieldset>
             <fieldset>
                 <legend>HP슬롯3</legend>
@@ -147,6 +149,7 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="hpslot3_cool">
+                <input type="text" onclick="input_test('hpslot3')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
             </fieldset>
             <fieldset>
                 <legend>HP슬롯4</legend>
@@ -159,6 +162,7 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="hpslot4_cool">
+                <input type="text" onclick="input_test('hpslot4')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
             </fieldset>
         </details>
     </fieldset>
@@ -180,7 +184,7 @@
             <label for="imgslot4">슬롯4</label>
         </div>
         <details>
-            <summary style="background-color: whitesmoke;">자세히</summary>
+            <summary>자세히</summary>
             <fieldset>
                 <legend>IMG슬롯1</legend>
                 <label class="subtitle">입력키</label>
@@ -194,6 +198,7 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="imgslot1_cool">
+                <input type="text" onclick="input_test('imgslot1')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
                 <br>
                 <label class="subtitle">임계값</label>
                 <input type="text" id="imgslot1_thres">
@@ -219,6 +224,7 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="imgslot2_cool">
+                <input type="text" onclick="input_test('imgslot2')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
                 <br>
                 <label class="subtitle">임계값</label>
                 <input type="text" id="imgslot2_thres">
@@ -244,6 +250,7 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="imgslot3_cool">
+                <input type="text" onclick="input_test('imgslot3')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
                 <br>
                 <label class="subtitle">임계값</label>
                 <input type="text" id="imgslot3_thres">
@@ -269,6 +276,7 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="imgslot4_cool">
+                <input type="text" onclick="input_test('imgslot4')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
                 <br>
                 <label class="subtitle">임계값</label>
                 <input type="text" id="imgslot4_thres">
@@ -301,7 +309,7 @@
             <label for="timer4">슬롯4</label>
         </div>
         <details>
-            <summary style="background-color: whitesmoke;">자세히</summary>
+            <summary>자세히</summary>
             <fieldset>
                 <legend>타이머1</legend>
                 <label class="subtitle">입력키</label>
@@ -309,6 +317,7 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="timer1_cool">
+                <input type="text" onclick="input_test('timer1')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
             </fieldset>
             <fieldset>
                 <legend>타이머2</legend>
@@ -317,6 +326,7 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="timer2_cool">
+                <input type="text" onclick="input_test('timer2')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
             </fieldset>
             <fieldset>
                 <legend>타이머3</legend>
@@ -325,6 +335,7 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="timer3_cool">
+                <input type="text" onclick="input_test('timer3')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
             </fieldset>
             <fieldset>
                 <legend>타이머4</legend>
@@ -333,6 +344,7 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="timer4_cool">
+                <input type="text" onclick="input_test('timer4')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
             </fieldset>
         </details>
     </fieldset>
@@ -474,13 +486,15 @@
         auto_start()
     }
 
-    const input_test = () => {
-        console.log("Input Test")
-        send_keys("OK")
+
+    const input_test = async (name) => {
+        const keys = document.getElementById(`${name}_key`).value
+        console.log(keys)
+        await send_keys(keys)
     }
 
-    const input_out = () => {
-        document.getElementById("inputTest").value = ""
+    const input_out = (element) => {
+        element.value = ""
     }
 
     const popup = () => {
@@ -530,8 +544,8 @@
         }
         if (run_loop == false) {
             run_loop = true
-            if (document.getElementById("streamURL").value == "browser") {
-                mode = "browser"
+            if (document.getElementById("streamURL").value == "device") {
+                mode = "device"
                 window.resizeTo(600, 600)
                 await start_capture()
                 await connect_serial()
@@ -596,7 +610,7 @@
                 }
                 else {
                     console.log(key)
-                    if (mode == "browser") {
+                    if (mode == "device") {
                         send_serial(key)
                     } else {
                         fetch(`${document.getElementById("inputURL").value}/${key}`)
@@ -613,7 +627,7 @@
 
     const loop = async () => {
         let frame;
-        if (mode == "browser") {
+        if (mode == "device") {
             video.width = video.videoWidth
             video.height = video.videoHeight
             const cap = new cv.VideoCapture(video);
@@ -750,7 +764,7 @@
         const fps = parseInt(document.getElementById("targetFPS").value)
         setTimeout(loop, 1000 / fps)
         const t_curr = new Date().getTime()
-        document.getElementById("resultFPS").value = (1000 / (t_curr - t_prev)).toFixed(1)
+        document.getElementById("latency").value = ((t_curr - t_prev) - (1000/fps)).toFixed(0)
         t_prev = t_curr
     }
 

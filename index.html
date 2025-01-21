@@ -613,7 +613,7 @@
                     if (mode == "device") {
                         send_serial(key)
                     } else {
-                        fetch(`${document.getElementById("inputURL").value}/${key}`)
+                        fetch(`${document.getElementById("inputURL").value}${key}`)
                     }
                 }
             }

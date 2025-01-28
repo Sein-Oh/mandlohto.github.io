@@ -2,7 +2,7 @@
 <html lang="ko-KR">
 
 <head>
-    <title>MandlAuto 25.01.20 v0.2</title>
+    <title>MandlAuto 25.01.28 v0.1</title>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="https://unpkg.com/xp.css" />
     <style>
@@ -27,6 +27,7 @@
             margin: 3px;
             background-color: lightgray
         }
+
         summary:hover {
             background-color: gray;
         }
@@ -44,7 +45,7 @@
         <div style="display: flex; justify-content:center;">
             <button id="btn_start" onclick="start_app()" class="menu" disabled="true">시작</button>
             <button onclick="popup()" class="menu" disabled="true">새창 열기</button>
-            <button class="menu" disabled="true" onclick="download_img()">캡처 저장</button>
+            <button onclick="pause_app()">일시정지</button>
             <!-- <button style="width:100px" class="menu" disabled="true">설정 불러오기</button> -->
         </div>
         <details>
@@ -70,8 +71,9 @@
             <label style="width:30%">텔레그램 채팅ID</label>
             <input type="text" id="teleId" style="width:65%;">
             <div style="display: flex; justify-content:center;">
-                <button style="width:140px" onclick="userdata_download()">설정 다운로드</button>
-                <button style="width:140px" onclick="userdata_load()">설정 불러오기</button>
+                <button style="width:100px" onclick="userdata_download()">설정 다운로드</button>
+                <button style="width:100px" onclick="userdata_load()">설정 불러오기</button>
+                <button style="width:80px" onclick="download_img()">캡처 저장</button>
             </div>
         </details>
 
@@ -123,7 +125,8 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="hpslot1_cool">
-                <input type="text" onclick="input_test('hpslot1')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <input type="text" onclick="input_test('hpslot1')" onmouseleave="input_out(this)" style="width:150px;"
+                    placeholder="클릭하여 입력 테스트">
             </fieldset>
             <fieldset>
                 <legend>HP슬롯2</legend>
@@ -136,7 +139,8 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="hpslot2_cool">
-                <input type="text" onclick="input_test('hpslot2')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <input type="text" onclick="input_test('hpslot2')" onmouseleave="input_out(this)" style="width:150px;"
+                    placeholder="클릭하여 입력 테스트">
             </fieldset>
             <fieldset>
                 <legend>HP슬롯3</legend>
@@ -149,7 +153,8 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="hpslot3_cool">
-                <input type="text" onclick="input_test('hpslot3')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <input type="text" onclick="input_test('hpslot3')" onmouseleave="input_out(this)" style="width:150px;"
+                    placeholder="클릭하여 입력 테스트">
             </fieldset>
             <fieldset>
                 <legend>HP슬롯4</legend>
@@ -162,7 +167,8 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="hpslot4_cool">
-                <input type="text" onclick="input_test('hpslot4')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <input type="text" onclick="input_test('hpslot4')" onmouseleave="input_out(this)" style="width:150px;"
+                    placeholder="클릭하여 입력 테스트">
             </fieldset>
         </details>
     </fieldset>
@@ -198,7 +204,8 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="imgslot1_cool">
-                <input type="text" onclick="input_test('imgslot1')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <input type="text" onclick="input_test('imgslot1')" onmouseleave="input_out(this)" style="width:150px;"
+                    placeholder="클릭하여 입력 테스트">
                 <br>
                 <label class="subtitle">임계값</label>
                 <input type="text" id="imgslot1_thres">
@@ -224,7 +231,8 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="imgslot2_cool">
-                <input type="text" onclick="input_test('imgslot2')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <input type="text" onclick="input_test('imgslot2')" onmouseleave="input_out(this)" style="width:150px;"
+                    placeholder="클릭하여 입력 테스트">
                 <br>
                 <label class="subtitle">임계값</label>
                 <input type="text" id="imgslot2_thres">
@@ -250,7 +258,8 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="imgslot3_cool">
-                <input type="text" onclick="input_test('imgslot3')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <input type="text" onclick="input_test('imgslot3')" onmouseleave="input_out(this)" style="width:150px;"
+                    placeholder="클릭하여 입력 테스트">
                 <br>
                 <label class="subtitle">임계값</label>
                 <input type="text" id="imgslot3_thres">
@@ -276,7 +285,8 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="imgslot4_cool">
-                <input type="text" onclick="input_test('imgslot4')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <input type="text" onclick="input_test('imgslot4')" onmouseleave="input_out(this)" style="width:150px;"
+                    placeholder="클릭하여 입력 테스트">
                 <br>
                 <label class="subtitle">임계값</label>
                 <input type="text" id="imgslot4_thres">
@@ -317,7 +327,8 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="timer1_cool">
-                <input type="text" onclick="input_test('timer1')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <input type="text" onclick="input_test('timer1')" onmouseleave="input_out(this)" style="width:150px;"
+                    placeholder="클릭하여 입력 테스트">
             </fieldset>
             <fieldset>
                 <legend>타이머2</legend>
@@ -326,7 +337,8 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="timer2_cool">
-                <input type="text" onclick="input_test('timer2')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <input type="text" onclick="input_test('timer2')" onmouseleave="input_out(this)" style="width:150px;"
+                    placeholder="클릭하여 입력 테스트">
             </fieldset>
             <fieldset>
                 <legend>타이머3</legend>
@@ -335,7 +347,8 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="timer3_cool">
-                <input type="text" onclick="input_test('timer3')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <input type="text" onclick="input_test('timer3')" onmouseleave="input_out(this)" style="width:150px;"
+                    placeholder="클릭하여 입력 테스트">
             </fieldset>
             <fieldset>
                 <legend>타이머4</legend>
@@ -344,12 +357,14 @@
                 <br>
                 <label class="subtitle">쿨타임</label>
                 <input type="text" id="timer4_cool">
-                <input type="text" onclick="input_test('timer4')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <input type="text" onclick="input_test('timer4')" onmouseleave="input_out(this)" style="width:150px;"
+                    placeholder="클릭하여 입력 테스트">
             </fieldset>
         </details>
     </fieldset>
 </body>
 <script>
+    let pause = false
     let mode = ""
     let run_loop = false
     let target_img = {}
@@ -627,69 +642,130 @@
 
     const loop = async () => {
         let frame;
-        if (mode == "device") {
-            video.width = video.videoWidth
-            video.height = video.videoHeight
-            const cap = new cv.VideoCapture(video);
-            frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
-            cap.read(frame);
-        } else {
-            frame = cv.imread(img)
-        }
-        cv.imshow("viewer", frame)
+        if (pause == false) {
+            if (mode == "device") {
+                video.width = video.videoWidth
+                video.height = video.videoHeight
+                const cap = new cv.VideoCapture(video);
+                frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+                cap.read(frame);
+            } else {
+                frame = cv.imread(img)
+            }
+            cv.imshow("viewer", frame)
 
-        // HP
-        try {
-            const x1 = parseInt(document.getElementById("hpslot_x1").value)
-            const y1 = parseInt(document.getElementById("hpslot_y1").value)
-            const x2 = parseInt(document.getElementById("hpslot_x2").value)
-            const y2 = parseInt(document.getElementById("hpslot_y2").value)
-            const thres = parseInt(document.getElementById("hpslot_thres").value)
+            // HP
+            try {
+                const x1 = parseInt(document.getElementById("hpslot_x1").value)
+                const y1 = parseInt(document.getElementById("hpslot_y1").value)
+                const x2 = parseInt(document.getElementById("hpslot_x2").value)
+                const y2 = parseInt(document.getElementById("hpslot_y2").value)
+                const thres = parseInt(document.getElementById("hpslot_thres").value)
 
 
-            let hpImg = new cv.Mat()
-            let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
-            hpImg = frame.roi(rect)
-            cv.imshow("hpImg", hpImg)
+                let hpImg = new cv.Mat()
+                let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+                hpImg = frame.roi(rect)
+                cv.imshow("hpImg", hpImg)
 
-            const hpImgPlanes = new cv.MatVector()
-            cv.split(hpImg, hpImgPlanes);
-            const hpRed = hpImgPlanes.get(0)
+                const hpImgPlanes = new cv.MatVector()
+                cv.split(hpImg, hpImgPlanes);
+                const hpRed = hpImgPlanes.get(0)
 
-            const hpBlur = new cv.Mat()
-            const ksize = new cv.Size(5, 5)
-            const anchor = new cv.Point(-1, -1)
-            cv.blur(hpRed, hpBlur, ksize, anchor, cv.BORDER_DEFAULT)
+                const hpBlur = new cv.Mat()
+                const ksize = new cv.Size(5, 5)
+                const anchor = new cv.Point(-1, -1)
+                cv.blur(hpRed, hpBlur, ksize, anchor, cv.BORDER_DEFAULT)
 
-            const hpThres = new cv.Mat()
-            cv.threshold(hpBlur, hpThres, thres, 255, cv.THRESH_BINARY)
+                const hpThres = new cv.Mat()
+                cv.threshold(hpBlur, hpThres, thres, 255, cv.THRESH_BINARY)
 
-            const hpData1D = []
-            const hpData2D = []
-            const hpMaxAry = []
+                const hpData1D = []
+                const hpData2D = []
+                const hpMaxAry = []
 
-            hpThres.data.forEach(value => hpData1D.push(value))
+                hpThres.data.forEach(value => hpData1D.push(value))
 
-            while (hpData1D.length) hpData2D.push(hpData1D.splice(0, hpThres.size().width))
+                while (hpData1D.length) hpData2D.push(hpData1D.splice(0, hpThres.size().width))
 
-            for (i = 0; i < hpData2D.length; i++) {
-                const idx = hpData2D[i].reverse().indexOf(255)
-                const value = idx < 0 ? hpImg.size().width : idx
-                hpMaxAry.push(value)
+                for (i = 0; i < hpData2D.length; i++) {
+                    const idx = hpData2D[i].reverse().indexOf(255)
+                    const value = idx < 0 ? hpImg.size().width : idx
+                    hpMaxAry.push(value)
+                }
+
+                const hpMinIdx = Math.min.apply(null, hpMaxAry) < 0 ? 0 : Math.min.apply(null, hpMaxAry)
+                const hpRatio_ = Math.round((hpThres.size().width - hpMinIdx) / hpThres.size().width * 100)
+                const hpRatio = hpRatio_ == 0 ? 100 : hpRatio_
+                document.getElementById("hpVal").innerHTML = hpRatio
+
+                for (let i = 1; i <= 4; i++) {
+                    const name = `hpslot${i}`
+                    if (document.getElementById(name).checked == true) {
+                        try {
+                            const min = parseInt(document.getElementById(`${name}_min`).value)
+                            const max = parseInt(document.getElementById(`${name}_max`).value)
+                            if (cooling[name] == false && hpRatio >= min && hpRatio <= max) {
+                                cool_run(name, parseFloat(document.getElementById(`${name}_cool`).value))
+                                await send_keys(document.getElementById(`${name}_key`).value)
+                            }
+                        } catch {
+                            console.log(`${name} failed.`)
+                        }
+                    }
+                }
+
+                hpImg.delete()
+                hpImgPlanes.delete()
+                hpRed.delete()
+                hpBlur.delete()
+                hpThres.delete()
+            } catch {
+                console.log("HP calculation failed.")
             }
 
-            const hpMinIdx = Math.min.apply(null, hpMaxAry) < 0 ? 0 : Math.min.apply(null, hpMaxAry)
-            const hpRatio_ = Math.round((hpThres.size().width - hpMinIdx) / hpThres.size().width * 100)
-            const hpRatio = hpRatio_ == 0 ? 100 : hpRatio_
-            document.getElementById("hpVal").innerHTML = hpRatio
-
+            // Img
             for (let i = 1; i <= 4; i++) {
-                const name = `hpslot${i}`
+                const name = `imgslot${i}`
+                if (document.getElementById(`${name}`).checked == true) {
+                    try {
+                        const x1 = parseInt(document.getElementById(`${name}_x1`).value)
+                        const y1 = parseInt(document.getElementById(`${name}_y1`).value)
+                        const x2 = parseInt(document.getElementById(`${name}_x2`).value)
+                        const y2 = parseInt(document.getElementById(`${name}_y2`).value)
+                        const thres = parseFloat(document.getElementById(`${name}_thres`).value)
+
+                        let croppedImg = new cv.Mat()
+                        let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+                        croppedImg = frame.roi(rect)
+
+                        const result = new cv.Mat()
+                        const mask = new cv.Mat()
+                        cv.matchTemplate(target_img[`imgslot${i}`], croppedImg, result, cv.TM_CCOEFF_NORMED, mask)
+                        const roc = cv.minMaxLoc(result, mask)
+
+                        document.getElementById(`imgslot${i}_res`).value = roc.maxVal.toFixed(2)
+
+                        if (cooling[name] == false && roc.maxVal >= thres && roc.maxVal < 1) {
+                            cool_run(name, parseFloat(document.getElementById(`${name}_cool`).value))
+                            await send_keys(document.getElementById(`${name}_key`).value)
+                        }
+
+                        croppedImg.delete()
+                        result.delete()
+                        mask.delete()
+                    } catch {
+                        console.log(`imgslot${i} failed.`)
+                    }
+                }
+            }
+
+            // Timer
+            for (let i = 1; i <= 4; i++) {
+                const name = `timer${i}`
                 if (document.getElementById(name).checked == true) {
                     try {
-                        const min = parseInt(document.getElementById(`${name}_min`).value)
-                        const max = parseInt(document.getElementById(`${name}_max`).value)
-                        if (cooling[name] == false && hpRatio >= min && hpRatio <= max) {
+                        if (cooling[name] == false) {
                             cool_run(name, parseFloat(document.getElementById(`${name}_cool`).value))
                             await send_keys(document.getElementById(`${name}_key`).value)
                         }
@@ -699,72 +775,12 @@
                 }
             }
 
-            hpImg.delete()
-            hpImgPlanes.delete()
-            hpRed.delete()
-            hpBlur.delete()
-            hpThres.delete()
-        } catch {
-            console.log("HP calculation failed.")
+            frame.delete()
         }
-
-        // Img
-        for (let i = 1; i <= 4; i++) {
-            const name = `imgslot${i}`
-            if (document.getElementById(`${name}`).checked == true) {
-                try {
-                    const x1 = parseInt(document.getElementById(`${name}_x1`).value)
-                    const y1 = parseInt(document.getElementById(`${name}_y1`).value)
-                    const x2 = parseInt(document.getElementById(`${name}_x2`).value)
-                    const y2 = parseInt(document.getElementById(`${name}_y2`).value)
-                    const thres = parseFloat(document.getElementById(`${name}_thres`).value)
-
-                    let croppedImg = new cv.Mat()
-                    let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
-                    croppedImg = frame.roi(rect)
-
-                    const result = new cv.Mat()
-                    const mask = new cv.Mat()
-                    cv.matchTemplate(target_img[`imgslot${i}`], croppedImg, result, cv.TM_CCOEFF_NORMED, mask)
-                    const roc = cv.minMaxLoc(result, mask)
-
-                    document.getElementById(`imgslot${i}_res`).value = roc.maxVal.toFixed(2)
-
-                    if (cooling[name] == false && roc.maxVal >= thres && roc.maxVal < 1) {
-                        cool_run(name, parseFloat(document.getElementById(`${name}_cool`).value))
-                        await send_keys(document.getElementById(`${name}_key`).value)
-                    }
-
-                    croppedImg.delete()
-                    result.delete()
-                    mask.delete()
-                } catch {
-                    console.log(`imgslot${i} failed.`)
-                }
-            }
-        }
-
-        // Timer
-        for (let i = 1; i <= 4; i++) {
-            const name = `timer${i}`
-            if (document.getElementById(name).checked == true) {
-                try {
-                    if (cooling[name] == false) {
-                        cool_run(name, parseFloat(document.getElementById(`${name}_cool`).value))
-                        await send_keys(document.getElementById(`${name}_key`).value)
-                    }
-                } catch {
-                    console.log(`${name} failed.`)
-                }
-            }
-        }
-
-        frame.delete()
-
         const fps = parseInt(document.getElementById("targetFPS").value)
         setTimeout(loop, 1000 / fps)
         const t_curr = new Date().getTime()
-        document.getElementById("latency").value = ((t_curr - t_prev) - (1000/fps)).toFixed(0)
+        document.getElementById("latency").value = ((t_curr - t_prev) - (1000 / fps)).toFixed(0)
         t_prev = t_curr
     }
 
@@ -852,6 +868,34 @@
     const userdata_load = async () => {
         const userdata = await load_json_file()
         apply_data(userdata)
+    }
+
+    const pause_app = () => {
+        pause = !pause
+        if (pause == true) {
+            fieldset_background("lightgray")
+            document.querySelectorAll(".menu").forEach(ele => {
+                ele.disabled = true
+            })
+            document.querySelectorAll("input[type='checkbox']").forEach(ele => {
+                ele.disabled = true
+            })
+        } else {
+            fieldset_background("white")
+            document.querySelectorAll(".menu").forEach(ele => {
+                ele.disabled = false
+            })
+            document.querySelectorAll("input[type='checkbox']").forEach(ele => {
+                ele.disabled = false
+            })
+        }
+        console.log(`pause : ${pause}`)
+    }
+
+    const fieldset_background = (color) => {
+        document.querySelectorAll("fieldset").forEach(ele => {
+            ele.style.background = color
+        })
     }
 </script>
 <script async src="https://docs.opencv.org/4.10.0/opencv.js" onload="setTimeout(cv_ready,500)"

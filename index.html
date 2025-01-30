@@ -569,7 +569,7 @@
     }
 
     const popup = () => {
-        window.open(window.location.href, "_blank", "width=350; height=350;location=no; menubar=no; status=no; toolbar=no")
+        window.open(window.location.href, "_blank", "width=350; height=300;location=no; menubar=no; status=no; toolbar=no")
         window.close()
     }
 
@@ -621,7 +621,7 @@
                 window.resizeTo(600, 600)
                 await start_capture()
                 await connect_serial()
-                window.resizeTo(360, 440)
+                window.resizeTo(360, 370)
             } else {
                 mode = "stream"
                 img.src = document.getElementById("streamURL").value

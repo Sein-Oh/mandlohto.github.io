@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>UI</title>
+    <title>만들오토-2025.04.19-r1</title>
     <style>
         body {
             -webkit-user-select: none;
@@ -73,7 +73,7 @@
     <fieldset class="container">
         <legend>기능</legend>
         <button onclick="pause_app()">일시정지</button>
-        <button>캡처저장</button>
+        <button onclick="download_img()">캡처저장</button>
     </fieldset>
     <fieldset class="container2" id="slot">
         <legend>슬롯</legend>
@@ -192,7 +192,14 @@
         const hour = ("0" + date.getHours()).slice(-2)
         const minute = ("0" + date.getMinutes()).slice(-2)
         const second = ("0" + date.getSeconds()).slice(-2)
-        const data = document.getElementById("viewer").toDataURL("image/png")
+
+        const cnv = document.createElement("canvas")
+        const cx = cnv.getContext("2d")
+        cnv.width = video.videoWidth
+        cnv.height = video.videoHeight
+        cx.drawImage(video, 0, 0)
+        const data = cnv.toDataURL("image/png")
+        // const data = document.getElementById("viewer").toDataURL("image/png")
         const link = document.createElement("a")
         link.download = `${month}${day}${hour}${minute}${second} capture.png`
         link.href = data
@@ -374,6 +381,8 @@
             }
         }
     }
+
+    
 
     const loop = async () => {
         const cap = new cv.VideoCapture(video)

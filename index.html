@@ -227,16 +227,26 @@
                 const data_ = data_line.trim().split("\r\n")
                 data_.forEach(d_ => {
                     const d = d_.split(":").map(x => x.trim())
-                    data_obj[d[0]] = d[1]
+                    if (d.length == 2) {
+                        data_obj[d[0]] = d[1]
+                    } else if (d.length == 3) {
+                        data_obj[d[0]] = d[1] + ":" + d[2]
+                    }
                 })
-                if (data_obj.type == "timer") {
-                    userdata["timer"][data_obj.name] = data_obj
-                } else if (data_obj.type == "hp") {
-                    userdata["hp"][data_obj.name] = data_obj
-                } else if (data_obj.type == "img") {
-                    userdata["img"][data_obj.name] = data_obj
+
+                if (data_obj.type == "telegram") {
+                    token = data_obj.token
+                    chat_id = data_obj.id
+                } else {
+                    if (data_obj.type == "timer") {
+                        userdata["timer"][data_obj.name] = data_obj
+                    } else if (data_obj.type == "hp") {
+                        userdata["hp"][data_obj.name] = data_obj
+                    } else if (data_obj.type == "img") {
+                        userdata["img"][data_obj.name] = data_obj
+                    }
+                    add_slot(data_obj.name)
                 }
-                add_slot(data_obj.name)
             }
         })
         setTimeout(check_img, 1000)
@@ -350,9 +360,17 @@
                 const pos_x = parseInt(p_x / video.videoWidth * 1000)
                 const pos_y = parseInt(p_y / video.videoHeight * 1000)
                 const mouse = pos_x + "," + pos_y
-                send_serial(mouse)
+                try {
+                    send_serial(mouse)
+                } catch {
+                    console.log("Serial not connected.")
+                }
             } else {
-                send_serial(key)
+                try {
+                    send_serial(key)
+                } catch {
+                    console.log("Serial not connected.")
+                }
             }
         }
     }
@@ -362,10 +380,8 @@
         let frame = new cv.Mat(video.height, video.width, cv.CV_8UC4)
         cap.read(frame)
 
-        let dst = new cv.Mat()
-        let dsize = new cv.Size(300, Math.round(video.videoHeight / ratio))
-        cv.resize(frame, dst, dsize, 0, 0, cv.INTER_AREA)
-        cv.imshow("viewer", dst)
+        // let dst = new cv.Mat()
+        let dst = frame.clone()
 
         if (pause == false) {
             for (name of Object.keys(userdata.hp)) {
@@ -379,6 +395,7 @@
 
                     let hpImg = new cv.Mat()
                     let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+                    cv.rectangle(dst, new cv.Point(x1, y1), new cv.Point(x2-x1, y2-y1), new cv.Scalar(0,255,0, 255), 20, cv.LINE_8, 0)
 
                     hpImg = frame.roi(rect)
 
@@ -445,6 +462,8 @@
                     let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
                     croppedImg = frame.roi(rect)
 
+                    cv.rectangle(dst, new cv.Point(x1, y1), new cv.Point(x2-x1, y2-y1), new cv.Scalar(255,0,0, 255), 20, cv.LINE_8, 0)
+
                     const result = new cv.Mat()
                     const mask = new cv.Mat()
                     cv.matchTemplate(mat_obj[userdata.img[name].img], croppedImg, result, cv.TM_CCOEFF_NORMED, mask)
@@ -474,6 +493,10 @@
                 }
             }
         }
+
+        let dsize = new cv.Size(300, Math.round(video.videoHeight / ratio))
+        cv.resize(dst, dst, dsize, 0, 0, cv.INTER_AREA)
+        cv.imshow("viewer", dst)
 
         dst.delete()
         frame.delete()

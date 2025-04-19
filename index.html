@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>만들오토-2025.04.19-r1</title>
+    <title>만들오토-2025.04.19-r2</title>
     <style>
         body {
             -webkit-user-select: none;
@@ -404,7 +404,8 @@
 
                     let hpImg = new cv.Mat()
                     let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
-                    cv.rectangle(dst, new cv.Point(x1, y1), new cv.Point(x2-x1, y2-y1), new cv.Scalar(0,255,0, 255), 20, cv.LINE_8, 0)
+                    console.log(x1, y1, x2, y2)
+                    cv.rectangle(dst, new cv.Point(x1, y1), new cv.Point(x2, y2), new cv.Scalar(0,255,0, 255), 20, cv.LINE_8, 0)
 
                     hpImg = frame.roi(rect)
 
@@ -471,7 +472,7 @@
                     let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
                     croppedImg = frame.roi(rect)
 
-                    cv.rectangle(dst, new cv.Point(x1, y1), new cv.Point(x2-x1, y2-y1), new cv.Scalar(255,0,0, 255), 20, cv.LINE_8, 0)
+                    cv.rectangle(dst, new cv.Point(x1, y1), new cv.Point(x2, y2), new cv.Scalar(255,0,0, 255), 20, cv.LINE_8, 0)
 
                     const result = new cv.Mat()
                     const mask = new cv.Mat()

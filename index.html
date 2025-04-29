@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>만들오토-2025.04.25-r0</title>
+    <title>만들오토-2025.04.29-r0</title>
     <style>
         body {
             -webkit-user-select: none;
@@ -174,9 +174,10 @@
         fetch(url)
     }
 
-    const telegram_photo = (token, chat_id, caption, canvas_elem) => {
+    const telegram_photo = (token, chat_id, caption) => {
         const url = `https://api.telegram.org/bot${token}/sendphoto?chat_id=${chat_id}`
-        const file = make_blob(canvas_elem);
+        capture_ctx.drawImage(video, 0, 0)
+        const file = make_blob(capture_cnv);
         const teleData = new FormData()
         teleData.append("photo", file)
         teleData.append("caption", caption)
@@ -355,7 +356,7 @@
                 telegram_message(token, chat_id, argument)
             } else if (key.indexOf("photo") >= 0) {
                 const argument = key.slice(key.indexOf("(") + 1, key.indexOf(")"))
-                telegram_photo(token, chat_id, argument, capture_cnv)
+                telegram_photo(token, chat_id, argument)
             } else if (key.indexOf("-") >= 0) {
                 const argument = key.slice(1, key.length)
                 await delay(argument * 1000)

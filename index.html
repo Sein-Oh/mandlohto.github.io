@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>만들오토-25.06.11</title>
+    <title>만들오토-25.06.28</title>
     <style>
         body {
             -webkit-user-select: none;
@@ -152,8 +152,8 @@
                     pos_x = parseInt(p_x / video.videoWidth * 1000)
                     pos_y = parseInt(p_y / video.videoHeight * 1000)
                 } else {
-                    pos_x = parseInt(p_x / img.width * 1000)
-                    pos_y = parseInt(p_y / img.height * 1000)
+                    pos_x = p_x
+                    pos_y = p_y
                 }
                 const mouse = pos_x + "," + pos_y
                 if (input_mode == "serial") {

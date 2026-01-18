@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Teachable Page</title>
+    <title>만들오토 2026.01.18</title>
     <style>
         /* Setting panel 전체 */
         fieldset.setting-panel {
@@ -205,7 +205,7 @@
         #info-text {
             font-size: 13px;
             line-height: 1.4;
-            height: 40px;
+            height: 70px;
             resize: none;
             overflow-y: auto;
             white-space: pre-wrap;
@@ -236,18 +236,30 @@
             <div class="option-container">
                 <div class="capture-row">
                     <select id="capture-option">
-                        <option>-- Select Capture --</option>
-                        <option value="camera_front">Camera (fronet)</option>
-                        <option value="camera_rear">Camera (rear)</option>
-                        <option value="desktop">Desktop</option>
+                        <option>-- Capture type --</option>
+                        <option value="desktop">Desktop Capture</option>
+                        <option value="camera_front">Front Camera</option>
+                        <option value="camera_rear">Rear Camera</option>
                         <option value="stream">StreamURL</option>
                     </select>
                 </div>
-                <button onclick="set_command_url()">Set Command URL</button>
-                <button onclick="add_model_url()">Add Model (URL)</button>
-                <button onclick="add_model_zip()">Add Model (.zip)</button>
-                <button id="capture-btn" class="capture-btn">Start Record</button>
-                <button onclick="go_to_tm()">Go to Teachable Machine</button>
+                <div class="capture-row">
+                    <select id="input-option">
+                        <option>-- Input type --</option>
+                        <option value="serial">Arduino board</option>
+                        <option value="url">Input server</option>
+                    </select>
+                </div>
+                <div class="capture-row">
+                    <select id="model-option">
+                        <option>-- Model load type --</option>
+                        <option value="file">File(.zip)</option>
+                        <option value="url">URL</option>
+                    </select>
+                </div>
+                <button id="capture-btn" class="capture-btn">녹화 시작</button>
+                <button onclick="go_to_tm()">학습사이트 바로가기</button>
+                <button>사용방법 알아보기</button>
             </div>
         </div>
     </fieldset>
@@ -264,6 +276,8 @@
     let model_num = 1
     let command_url = ""
 
+    let input_type = null
+
     const canvas = document.getElementById('canvas')
     const ctx = canvas.getContext('2d')
 
@@ -272,6 +286,9 @@
     let captureInterval
     let capturedImages = []
     let lastCanvasDataURL = null
+
+    const screen_width = window.screen.width
+    const screen_height = window.screen.height
 
     const infoText = document.getElementById('info-text');
     const maxLines = 50; // 최대 50줄 유지
@@ -301,15 +318,15 @@
         infoText.scrollTop = infoText.scrollHeight;
     }
 
-    const send = async (command) => {
+    const send_url = async (command) => {
         const url = command_url.endsWith("/") ? command_url + command : command_url + "/" + command
         try {
             await fetch(url)
             console.log(`Sent command: ${command}`)
-            update_info(`Sent command: ${command}`)
+            update_info(`명령어 전송: ${command}`)
         } catch (err) {
             console.error(`Failed to send command: ${command}`)
-            update_info(`Failed to send command: ${command}`)
+            update_info(`명령어 전송 실패: ${command}`)
         }
     }
 
@@ -318,7 +335,7 @@
         if (url) {
             command_url = url
             console.log(`Command URL set to: ${command_url}`)
-            update_info(`Command URL set to: ${command_url}`)
+            update_info(`Input 서버 URL: ${command_url}`)
         }
     }
 
@@ -358,17 +375,19 @@
                     panelUpdate(p.className, p.probability)
 
                     const checked = document.getElementById(`${model_id}_${p.className}_run`).checked
-                    const command = document.getElementById(`${model_id}_${p.className}_input`).value
+                    const command = convert_command(document.getElementById(`${model_id}_${p.className}_input`).value)
                     const threshold = parseFloat(document.getElementById(`${model_id}_${p.className}_threshold`).value)
                     const cooltime = parseFloat(document.getElementById(`${model_id}_${p.className}_cooltime`).value)
                     const cooling = cools[model_id][p.className]
                     if (checked && p.probability >= threshold && !cooling) {
-                        send(command)
-                        // update_info(`${p.className} triggered command: ${command}`)
+                        if (input_type === "serial") {
+                            send_serial(command)
+                        } else if (input_type === "url") {
+                            send_url(command)
+                        }
                         cools[model_id][p.className] = true
                         setTimeout(() => {
                             cools[model_id][p.className] = false
-                            // console.log(`Cooltime ended for ${model_id} - ${p.className}`)
                         }, cooltime * 1000)
                     }
                 })
@@ -384,31 +403,29 @@
 
     const tf_loaded = () => {
         console.log(`Tensorflow.js is loaded ${tf.version.tfjs}`)
-        update_info(`Tensorflow.js is loaded`)
+        update_info(`Tensorflow.js 로드 완료.`)
     }
 
     const tm_loaded = () => {
         console.log(`Teachable Machine library is loaded ${tmImage.version}`)
-        update_info(`Teachable Machine library is loaded`)
-        // add_model("https://teachablemachine.withgoogle.com/models/H8sC205cI")
+        update_info(`Teachable Machine 로드 완료.`)
     }
 
     const jszip_loaded = () => {
         console.log('JSZip library is loaded')
-        update_info('JSZip library is loaded')
+        update_info('JSZip 로드 완료.')
     }
 
     const go_to_tm = () => {
         window.open('https://teachablemachine.withgoogle.com/', '_blank')
-        update_info('Opened Teachable Machine website')
     }
 
     captureBtn.addEventListener('click', async () => {
         if (!capturing) {
             // --- 캡처 시작 ---
-            update_info('Capture started')
+            update_info('캡처를 시작합니다.')
             capturing = true
-            captureBtn.textContent = 'Stop Record'
+            captureBtn.textContent = '녹화 중지'
             captureBtn.style.backgroundColor = '#f44336'
             capturedImages = []
 
@@ -418,9 +435,9 @@
             }, 500)
         } else {
             // --- 캡처 중지 ---
-            update_info('Capture stopped')
+            update_info('캡처를 중지합니다.')
             capturing = false
-            captureBtn.textContent = 'Start Record'
+            captureBtn.textContent = '녹화 시작'
             captureBtn.style.backgroundColor = '#4caf50'
             clearInterval(captureInterval)
 
@@ -452,7 +469,7 @@
             const link = document.createElement('a')
             link.href = URL.createObjectURL(zipBlob)
             link.download = `captures_${timestamp}.zip`
-            update_info(`Downloading captures_${timestamp}.zip with ${capturedImages.length} images`)
+            update_info(`녹화한 사진 ${capturedImages.length}장을 ${timestamp}.zip으로 저장했습니다.`)
             link.click()
             URL.revokeObjectURL(link.href)
         }
@@ -474,8 +491,31 @@
             get_user_stream(url)
             console.log("stream selected")
         }
-        update_info(`Capture started with ${value}`)
         main()
+    })
+
+    document.getElementById('input-option').addEventListener('change', (event) => {
+        document.getElementById('input-option').disabled = true
+        const value = event.target.value
+        if (value === "url") {
+            input_type = "url"
+            set_command_url()
+        } else {
+            input_type = "serial"
+            connect_serial()
+        }
+    })
+
+    document.getElementById('model-option').addEventListener('change', (event) => {
+        const value = event.target.value
+        if (value === "url") {
+            input_type = "url"
+            add_model_url()
+        } else {
+            input_type = "file"
+            add_model_zip()
+        }
+        document.getElementById('model-option').value = "-- Model load type --"
     })
 
     const get_user_camera = async (facing_mode) => {
@@ -499,29 +539,12 @@
                 const drawFrame = () => {
                     const cw = canvas.width
                     const ch = canvas.height
-                    ctx.fillStyle = 'black' // 패딩 영역을 검은색으로 채움
-                    ctx.fillRect(0, 0, cw, ch)
-
-                    // 비율 유지
-                    const videoRatio = video.videoWidth / video.videoHeight
-                    const canvasRatio = cw / ch
-                    let dw, dh, dx, dy
-
-                    if (videoRatio > canvasRatio) {
-                        // 비디오가 캔버스보다 더 넓음 → 폭 기준 맞춤
-                        dw = cw
-                        dh = cw / videoRatio
-                        dx = 0
-                        dy = (ch - dh) / 2
-                    } else {
-                        // 비디오가 캔버스보다 더 높음 → 높이 기준 맞춤
-                        dh = ch
-                        dw = ch * videoRatio
-                        dx = (cw - dw) / 2
-                        dy = 0
-                    }
-
-                    ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, dx, dy, dw, dh)
+                    const vw = video.videoWidth
+                    const vh = video.videoHeight
+                    const size = Math.min(vw, vh)
+                    const sx = (vw - size) / 2
+                    const sy = (vh - size) / 2
+                    ctx.drawImage(video, sx, sy, size, size, 0, 0, cw, ch)
                     requestAnimationFrame(drawFrame)
                 }
                 drawFrame()
@@ -555,28 +578,7 @@
             video.onloadedmetadata = () => {
                 video.play()
                 const drawFrame = () => {
-                    const cw = canvas.width
-                    const ch = canvas.height
-                    ctx.fillStyle = 'black'
-                    ctx.fillRect(0, 0, cw, ch)
-
-                    const videoRatio = video.videoWidth / video.videoHeight
-                    const canvasRatio = cw / ch
-                    let dw, dh, dx, dy
-
-                    if (videoRatio > canvasRatio) {
-                        dw = cw
-                        dh = cw / videoRatio
-                        dx = 0
-                        dy = (ch - dh) / 2
-                    } else {
-                        dh = ch
-                        dw = ch * videoRatio
-                        dx = (cw - dw) / 2
-                        dy = 0
-                    }
-
-                    ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, dx, dy, dw, dh)
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
                     requestAnimationFrame(drawFrame)
                 }
                 drawFrame()
@@ -600,7 +602,6 @@
         const interval = 100
         const cw = canvas.width
         const ch = canvas.height
-
         const img = new Image()
         img.crossOrigin = 'anonymous'
         img.src = url
@@ -610,35 +611,11 @@
         img.onload = () => {
             const draw = () => {
                 if (stop) return
-
-                // 비율 유지 및 패딩
-                const iw = img.width
-                const ih = img.height
-                const ratio = iw / ih
-                const canvasRatio = cw / ch
-
-                let dw, dh, dx, dy
-                if (ratio > canvasRatio) {
-                    dw = cw
-                    dh = cw / ratio
-                    dx = 0
-                    dy = (ch - dh) / 2
-                } else {
-                    dh = ch
-                    dw = ch * ratio
-                    dx = (cw - dw) / 2
-                    dy = 0
-                }
-
-                ctx.fillStyle = 'black'
-                ctx.fillRect(0, 0, cw, ch)
-                ctx.drawImage(img, dx, dy, dw, dh)
-
+                ctx.drawImage(img, 0, 0, cw, ch)
                 setTimeout(draw, interval)
             }
             draw()
         }
-
         img.onerror = (e) => {
             console.error('Failed to load stream:', e)
             alert('스트림 URL을 불러올 수 없습니다.')
@@ -653,7 +630,7 @@
     const add_model_url = () => {
         const url = prompt("Enter Teachable Machine Model URL:", "https://teachablemachine.withgoogle.com/models/H8sC205cI")
         add_model(url)
-        update_info(`Adding model from URL: ${url}`)
+        update_info(`${url}에서 모델을 추가합니다.`)
     }
 
     const add_model_zip = () => {
@@ -715,7 +692,7 @@
         })
         // 파일 선택창 열기
         fileInput.click()
-        update_info(`Adding model from ZIP file`)
+        update_info(`ZIP 파일에서 모델을 추가합니다`)
     }
 
 
@@ -851,6 +828,64 @@
             else bar.valueDisplay.style.marginLeft = '0'
         }
         Object.keys(progressBars).forEach(name => panels[model_id](name, 0))
+    }
+
+    let port = null
+    let writer = null
+    const encoder = new TextEncoder()
+    async function connect_serial() {
+        try {
+            if (!("serial" in navigator)) {
+                alert("Web Serial API를 지원하지 않는 브라우저입니다.")
+                return
+            }
+            port = await navigator.serial.requestPort()
+            await port.open({ baudRate: 9600 })
+            writer = port.writable.getWriter()
+            console.log("✅ Serial connected")
+            update_info("시리얼 연결 완료.")
+        } catch (err) {
+            console.error("❌ Serial connect error:", err)
+            alert("시리얼 연결 실패.")
+        }
+    }
+
+    async function send_serial(data) {
+        if (!writer) {
+            update_info("시리얼이 연결되지 않았습니다.")
+            return
+        }
+        try {
+            const buffer = encoder.encode(data)
+            await writer.write(buffer)
+            console.log("➡️ Sent:", data)
+            update_info(`명령어 전송: ${data}`)
+        } catch (err) {
+            console.error("❌ Send error:", err)
+            update_info(`명령어 전송 실패: ${data}`)
+        }
+    }
+
+    function convert_command(data) {
+        let data_str = ""
+        data.split(" ").forEach(cmd => {
+            if (cmd.includes(",") && cmd.includes("d")) {
+                const x = parseInt(cmd.split(",")[0].slice(1, 5))
+                const y = parseInt(cmd.split(",")[1])
+                const scaled_x = Math.floor((x / 1000) * screen_width)
+                const scaled_y = Math.floor((y / 1000) * screen_height)
+                data_str += `d${scaled_x},${scaled_y} `
+            } else if (cmd.includes(",")) {
+                const x = parseInt(cmd.split(",")[0])
+                const y = parseInt(cmd.split(",")[1])
+                const scaled_x = Math.floor((x / 1000) * screen_width)
+                const scaled_y = Math.floor((y / 1000) * screen_height)
+                data_str += `${scaled_x},${scaled_y} `
+            } else {
+                data_str += `${cmd} `
+            }
+        })
+        return data_str
     }
 
 </script>

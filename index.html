@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>만들오토 2026.01.18</title>
+    <title>만들오토 2026.01.19</title>
     <style>
         /* Setting panel 전체 */
         fieldset.setting-panel {
@@ -246,8 +246,9 @@
                 <div class="capture-row">
                     <select id="input-option">
                         <option>-- 입력 선택 --</option>
-                        <option value="serial">아두이노</option>
-                        <option value="url">입력 서버</option>
+                        <option value="serial">시리얼</option>
+                        <option value="url">서버</option>
+                        <option value="ble">블루투스</option>
                     </select>
                 </div>
                 <div class="capture-row">
@@ -269,6 +270,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"
     onload="tm_loaded()"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" onload="jszip_loaded()"></script>
+<script src="mwb.js"></script>
 <script>
     const models = {}
     const panels = {}
@@ -384,6 +386,8 @@
                             send_serial(command)
                         } else if (input_type === "url") {
                             send_url(command)
+                        } else if (input_type === "ble") {
+                            send_ble(command)
                         }
                         cools[model_id][p.className] = true
                         setTimeout(() => {
@@ -500,9 +504,17 @@
         if (value === "url") {
             input_type = "url"
             set_command_url()
-        } else {
+            return
+        }
+        if (value === "serial") {
             input_type = "serial"
             connect_serial()
+            return
+        }
+        if (value == "ble") {
+            input_type = "ble"
+            mwb_connect()
+            return
         }
     })
 
@@ -872,14 +884,14 @@
             if (cmd.includes(",") && cmd.includes("d")) {
                 const x = parseInt(cmd.split(",")[0].slice(1, 5))
                 const y = parseInt(cmd.split(",")[1])
-                const scaled_x = Math.floor((x / 1000) * screen_width)
-                const scaled_y = Math.floor((y / 1000) * screen_height)
+                const scaled_x = Math.floor((x / screen_width) * 1000)
+                const scaled_y = Math.floor((y / screen_height) * 1000)
                 data_str += `d${scaled_x},${scaled_y} `
             } else if (cmd.includes(",")) {
                 const x = parseInt(cmd.split(",")[0])
                 const y = parseInt(cmd.split(",")[1])
-                const scaled_x = Math.floor((x / 1000) * screen_width)
-                const scaled_y = Math.floor((y / 1000) * screen_height)
+                const scaled_x = Math.floor((x / screen_width) * 1000)
+                const scaled_y = Math.floor((y / screen_height) * 1000)
                 data_str += `${scaled_x},${scaled_y} `
             } else {
                 data_str += `${cmd} `
@@ -887,6 +899,26 @@
         })
         return data_str
     }
+
+    function mwb_connect() {
+        mwb.uart.start((msg) => {
+            console.log("UART RX:", msg)
+        })
+    }
+
+    mwb.uart.onConnected = function (device) {
+        console.log("micro:bit connected!", device.name)
+    }
+
+    async function send_ble(data) {
+        try {
+            await mwb.uart.send(data + "\n")
+        } catch (err) {
+            console.error("❌ BLE Send error:", err)
+        }
+    }
+
+
 
 </script>
 

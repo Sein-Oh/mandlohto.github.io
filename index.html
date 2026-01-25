@@ -285,6 +285,8 @@
     const btn_record = document.getElementById("btn_record")
     let capturing = false
     let capture_interval
+    let record_delay = 300
+
     let captured_images = []
     btn_record.addEventListener("click", async () => {
         console.log("캡쳐 녹화 시작")
@@ -295,7 +297,7 @@
             capture_interval = setInterval(() => {
                 const data_url = canvas.toDataURL("image/png")
                 captured_images.push(data_url)
-            }, 500)
+            }, record_delay)
         } else {
             console.log("캡쳐 녹화 중지")
             capturing = false

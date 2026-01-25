@@ -1,630 +1,444 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>만들오토 2026.01.19</title>
+    <title>만들오토 2026.01.25</title>
     <style>
-        /* Setting panel 전체 */
-        fieldset.setting-panel {
-            display: flex;
-            flex-direction: column;
-            /* 세로로 쌓음 */
-            width: 423px;
-            border: 2px solid #ccc;
-            border-radius: 10px;
+        body {
+            user-select: none;
+            font-size: 13px;
+            font-family: "Segoe UI", Roboto, Arial, sans-serif;
+            background: #f5f6f8;
+            color: #222;
             padding: 10px;
-            margin: 12px;
-            background: #fafafa;
-            gap: 12px;
-            /* 내부 요소 간 간격 */
         }
 
-        fieldset.setting-panel legend {
-            font-weight: bold;
-            padding: 0 6px;
-            color: #333;
-        }
-
-        /* canvas와 옵션 컨테이너를 한 행에 배치 */
-        .canvas-option-row {
-            display: flex;
-            gap: 12px;
-            width: 100%;
-        }
-
-        option {
-            text-align: center;
-            text-align-last: center
-        }
-
-        /* canvas 좌측 정렬 */
-        .canvas-option-row canvas {
-            /* flex 내에서 자동으로 왼쪽 정렬되므로 추가 스타일 필요 없음 */
-            border-radius: 10px;
-            /* 기존 inline style 중복 가능 */
-        }
-
-        /* 옵션 컨테이너: 세로로 쌓음 */
-        .option-container {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            flex: 1;
-            /* 남는 공간 채우기 */
-        }
-
-        /* 옵션 행 */
-        .capture-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            width: 100%;
-        }
-
-        .capture-label {
-            min-width: 100px;
-            font-weight: bold;
-            font-size: 13px;
-            text-align: right;
-        }
-
-        .capture-row select {
-            flex: 1;
-            /* select가 남는 공간 채움 */
-            height: 32px;
-            font-size: 13px;
-            border-radius: 5px;
+        fieldset {
             border: 1px solid #ccc;
-            padding: 0 6px;
-        }
-
-        /* Model panel */
-        fieldset.model-panel {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            width: 423px;
-            border: 2px solid #ccc;
-            border-radius: 10px;
-            padding: 10px;
-            margin: 12px;
-            background: #fafafa;
-        }
-
-        fieldset.model-panel legend {
-            font-weight: bold;
-            padding: 0 6px;
-            color: #333;
-        }
-
-        /* 클래스별 progress row */
-        .class-wrapper,
-        .header-row {
-            display: grid;
-            grid-template-columns: 70px 1fr 60px 60px 100px 50px;
-            align-items: center;
-            gap: 6px;
-            width: 100%;
-        }
-
-        .header-row {
-            font-weight: bold;
-            margin-left: 2px;
-            margin-bottom: 6px;
-            border-bottom: 1px solid #bbb;
-            padding-bottom: 4px;
-            color: black;
-            font-size: 12px;
-        }
-
-        .progress-wrapper {
-            position: relative;
-            height: 28px;
-            background: #e0e0e0;
             border-radius: 6px;
-            overflow: hidden;
+            background: #fff;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
 
-        .progress-bar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 100%;
-            width: 0%;
-            background: #4caf50;
-            transition: width 0.4s ease;
+        legend {
+            padding: 0 6px;
+            font-weight: 600;
+            color: #555;
         }
 
-        .value-display {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 13px;
-            color: white;
-            font-weight: bold;
-            pointer-events: none;
-        }
-
-        .threshold-input,
-        .cooltime-input,
-        .message-input {
-            height: 28px;
+        select,
+        input,
+        button {
+            font-size: 12px;
+            border-radius: 4px;
             border: 1px solid #ccc;
-            border-radius: 5px;
-            padding: 2px 6px;
-            font-size: 13px;
+            outline: none;
+            text-align: center;
+            text-align-last: center;
+        }
+
+        select,
+        input[type="text"],
+        input[type="number"] {
+            height: 22px;
+            padding: 0 6px;
+        }
+
+        select {
+            background: #fff;
         }
 
         button {
-            height: 32px;
-            font-size: 13px;
-            border-radius: 5px;
-            border: none;
-            padding: 0 12px;
-            background-color: #4caf50;
-            color: white;
+            height: 22px;
+            background: linear-gradient(#fafafa, #eaeaea);
             cursor: pointer;
         }
 
         button:hover {
-            background-color: #45a049;
+            background: linear-gradient(#ffffff, #e0e0e0);
         }
 
-        .run-checkbox {
-            width: 20px;
-            height: 20px;
-            transform: scale(1.5);
-            margin: 0;
-            margin-left: 10px;
-            cursor: pointer;
-        }
-
-        fieldset.info-panel {
+        .container {
+            padding: 6px;
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
-            width: 423px;
-            border: 2px solid #ccc;
-            border-radius: 10px;
-            padding: 6px 10px;
-            margin: 12px;
-            background: #f9f9f9;
-            /* info 패널 배경색 */
+            gap: 6px;
         }
 
-        fieldset.info-panel legend {
-            font-weight: bold;
-            padding: 0 6px;
-            margin-bottom: 4px;
-            color: #333;
-            font-size: 14px;
+        .canvas-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px dashed #bbb;
+            background: #fafafa;
+            border-radius: 4px;
+            padding: 4px;
+            min-height: 150px;
         }
 
-        #info-text {
-            font-size: 13px;
-            line-height: 1.4;
-            height: 70px;
-            resize: none;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            padding: 6px;
-            border: 1px solid #ccc;
+        .canvas-wrapper canvas {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 4px;
+            background: #000;
+        }
+
+        /* ===== 모델 패널 ===== */
+
+        .model-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid #ddd;
             border-radius: 6px;
-            background-color: #ffffff;
-            color: #333;
-            font-family: monospace;
-            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 6px;
+            margin-top: 8px;
+            background: #fafafa;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        }
+
+        .model-container img {
+            width: 96px;
+            height: auto;
+            object-fit: contain;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            flex-shrink: 0;
+        }
+
+        .model-table {
+            border-collapse: collapse;
+            font-size: 10px;
+            width: 100%;
+        }
+
+        .model-table th,
+        .model-table td {
+            border: 1px solid #ccc;
+            padding: 3px 4px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .model-table th {
+            background: #f0f0f0;
+            font-weight: 600;
+        }
+
+        .model-table tr.highlight {
+            background: #fff3c4;
+        }
+
+        .model-table input {
+            width: 100%;
+            font-size: 10px;
+            height: 16px;
+            line-height: 16px;
+            padding: 0 4px;
+            box-sizing: border-box;
+        }
+
+        .model-table input[type="checkbox"] {
+            display: block;
+            margin: 0 auto;
+            transform: scale(0.9);
+        }
+
+        /* ROI 입력 줄 정리 */
+        #div_roi {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        span {
+            white-space: nowrap;
         }
     </style>
+
 </head>
 
 <body>
-    <fieldset class="info-panel">
-        <legend>Information</legend>
-        <textarea id="info-text" readonly></textarea>
-    </fieldset>
-    <fieldset class="setting-panel">
-        <legend>Setting</legend>
+    <fieldset class="container" style="width: 420px; height: 320px;">
+        <legend>미리보기</legend>
+        <div style="display:flex; gap:6px;">
+            <select id="sel_capture" disabled="true" style="width:50%">
+                <option value="none">--캡쳐방법 선택--</option>
+                <option value="desktop">데스크탑</option>
+                <option value="webcam_user">웹캠(전면)</option>
+                <option value="webcam_env">웹캠(후면)</option>
+                <option value="streaming">스트리밍URL</option>
+            </select>
+            <select id="sel_area" style="width:50%">
+                <option value="full">전체화면</option>
+                <option value="custom">캡쳐영역 지정</option>
+            </select>
+        </div>
+        <div id="div_roi" style="display:none;">
+            <span style="margin-left:50px;">캡쳐영역</span>
+            <input id="inp_roi" type="text" style="width:250px;" placeholder="x,y,width,height">
+        </div>
+        <div style="display:flex; gap:6px;">
+            <button id="btn_record" style="width:50%;">캡쳐 녹화</button>
+            <button onclick="save_capture()" style="width:50%;">캡쳐 저장</button>
+        </div>
 
-        <div class="canvas-option-row">
-            <!-- 좌측 canvas -->
-            <canvas id="canvas" width="224" height="224" style="border:1px solid #ccc; border-radius:10px;"></canvas>
-
-            <!-- 우측 옵션 컨테이너 -->
-            <div class="option-container">
-                <div class="capture-row">
-                    <select id="capture-option">
-                        <option>-- 캡쳐 선택 --</option>
-                        <option value="desktop">데스크탑 스크린</option>
-                        <option value="camera_front">전면 카메라</option>
-                        <option value="camera_rear">후면 카메라</option>
-                        <option value="stream">스티리밍 URL</option>
-                    </select>
-                </div>
-                <div class="capture-row">
-                    <select id="input-option">
-                        <option>-- 입력 선택 --</option>
-                        <option value="serial">시리얼</option>
-                        <option value="url">서버</option>
-                        <option value="ble">블루투스</option>
-                    </select>
-                </div>
-                <div class="capture-row">
-                    <select id="model-option">
-                        <option>-- 모델 불러오기 --</option>
-                        <option value="file">zip파일</option>
-                        <option value="url">URL</option>
-                    </select>
-                </div>
-                <button id="capture-btn" class="capture-btn">녹화 시작</button>
-                <button onclick="go_to_tm()">학습사이트 바로가기</button>
-                <button>사용방법 알아보기</button>
-            </div>
+        <div class="canvas-wrapper">
+            <canvas id="canvas"></canvas>
         </div>
     </fieldset>
+    <fieldset class="container" style="width:420px;">
+        <legend>설정</legend>
+        <select id="sel_input">
+            <option value="none">--입력방법 선택--</option>
+            <option value="arduino">아두이노</option>
+            <option value="server">서버</option>
+        </select>
+        <div style="display:flex; gap:6px;">
+            <button style="width:33%;" onclick="change_delay()">FPS 설정</button>
+            <button style="width:33%;" onclick="go_to_tm()">학습사이트</button>
+            <button style="width:33%;">도움말</button>
+        </div>
+    </fieldset>
+    <fieldset id="model_container" class="container" style="width:420px;">
+        <legend>모델</legend>
+        <button onclick="add_model_zip()">불러오기</button>
+    </fieldset>
 </body>
-
-<script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js" onload="tf_loaded()"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"
-    onload="tm_loaded()"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" onload="jszip_loaded()"></script>
-<script src="mwb.js"></script>
+<script defer src="tf.min.js" onload="tf_loaded()"></script>
+<script defer src="teachablemachine-image.min.js" onload="tm_loaded()"></script>
+<script defer src="jszip.min.js" onload="jszip_loaded()"></script>
 <script>
+    let tf_ready = false
+    let tm_ready = false
+    let jszip_ready = false
+    let delay = 300
+
     const models = {}
-    const panels = {}
+    const model_rois = {}
+    const model_panels = {}
     const cools = {}
-    let model_num = 1
+
+    const canvas = document.getElementById("canvas")
+    const ctx = canvas.getContext("2d")
+    const video = document.createElement("video")
+    video.autoplay = true
+
     let command_url = ""
-
     let input_type = null
+    let video_type = null
 
-    const canvas = document.getElementById('canvas')
-    const ctx = canvas.getContext('2d')
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
 
-    const captureBtn = document.getElementById('capture-btn')
-    let capturing = false
-    let captureInterval
-    let capturedImages = []
-    let lastCanvasDataURL = null
-
-    const screen_width = window.screen.width
-    const screen_height = window.screen.height
-
-    const infoText = document.getElementById('info-text');
-    const maxLines = 50; // 최대 50줄 유지
-
-    const update_info = (message) => {
-        const now = new Date();
-        const hh = String(now.getHours()).padStart(2, '0');
-        const mm = String(now.getMinutes()).padStart(2, '0');
-        const ss = String(now.getSeconds()).padStart(2, '0');
-        const timestamp = `[${hh}:${mm}:${ss}] `;
-
-        // 기존 텍스트 가져오기
-        let lines = infoText.value.split('\n').filter(line => line.trim() !== '');
-
-        // 새로운 메시지 추가
-        lines.push(`${timestamp}${message}`);
-
-        // 최대 줄 수 제한
-        if (lines.length > maxLines) {
-            lines = lines.slice(lines.length - maxLines);
+    const sel_capture = document.getElementById("sel_capture")
+    sel_capture.addEventListener("change", (event) => {
+        const value = event.target.value
+        console.log(`캡쳐방법 선택: ${value}`)
+        if (value === "desktop") get_user_screen()
+        else if (value === "webcam_user") get_user_camera("user")
+        else if (value === "webcam_env") get_user_camera("environment")
+        else if (value === "streaming") {
+            const url = prompt("스티리밍 URL을 입력하세요.")
+            get_user_stream(url)
         }
+    })
 
-        // textarea에 반영
-        infoText.value = lines.join('\n');
 
-        // 항상 최신 메시지가 보이도록 스크롤
-        infoText.scrollTop = infoText.scrollHeight;
-    }
-
-    const send_url = async (command) => {
-        const url = command_url.endsWith("/") ? command_url + command : command_url + "/" + command
-        try {
-            await fetch(url)
-            console.log(`Sent command: ${command}`)
-            update_info(`명령어 전송: ${command}`)
-        } catch (err) {
-            console.error(`Failed to send command: ${command}`)
-            update_info(`명령어 전송 실패: ${command}`)
+    const sel_area = document.getElementById("sel_area")
+    sel_area.disabled = true
+    let use_roi = false
+    sel_area.addEventListener("change", (event) => {
+        const value = event.target.value
+        console.log(`캡쳐영역 선택: ${value}`)
+        if (value === "full") {
+            document.getElementById("div_roi").style.display = "none"
+            use_roi = false
+        } else if (value === "custom") {
+            use_roi = true
+            document.getElementById("div_roi").style.display = "flex"
         }
-    }
+    })
+    const inp_roi = document.getElementById("inp_roi")
 
-    const set_command_url = () => {
-        const url = prompt("Enter Command URL:", "http://localhost:8000/input")
-        if (url) {
-            command_url = url
-            console.log(`Command URL set to: ${command_url}`)
-            update_info(`Input 서버 URL: ${command_url}`)
-        }
-    }
-
-    const main = async () => {
-        // 모델이 존재하지 않으면 다음 반복으로
-        if (Object.keys(models).length === 0) {
-            setTimeout(main, 200)
-            console.log("Models not exist")
-            return
-        }
-
-        // 캔버스에 이미지가 있는지 확인
-        const currentCanvasDataURL = canvas.toDataURL('image/png')
-        if (!currentCanvasDataURL || currentCanvasDataURL === lastCanvasDataURL) {
-            // 이미지가 없거나 이전과 동일하면 다음 반복
-            setTimeout(main, 200)
-            console.log("Canvas image not changed")
-            return
-        }
-
-        lastCanvasDataURL = currentCanvasDataURL
-
-        // 모델별 예측 수행
-        for (const model_id in models) {
-            // console.log(`Running prediction for ${model_id}`)
-            const model = models[model_id]
-            if (!model) continue
-
-            try {
-                const prediction = await model.predict(canvas)
-
-                prediction.forEach(p => {
-                    const panelUpdate = panels[model_id]
-                    if (!panelUpdate) return
-
-                    // --- 기존 panels 업데이트 ---
-                    panelUpdate(p.className, p.probability)
-
-                    const checked = document.getElementById(`${model_id}_${p.className}_run`).checked
-                    const command = convert_command(document.getElementById(`${model_id}_${p.className}_input`).value)
-                    const threshold = parseFloat(document.getElementById(`${model_id}_${p.className}_threshold`).value)
-                    const cooltime = parseFloat(document.getElementById(`${model_id}_${p.className}_cooltime`).value)
-                    const cooling = cools[model_id][p.className]
-                    if (checked && p.probability >= threshold && !cooling) {
-                        if (input_type === "serial") {
-                            send_serial(command)
-                        } else if (input_type === "url") {
-                            send_url(command)
-                        } else if (input_type === "ble") {
-                            send_ble(command)
-                        }
-                        cools[model_id][p.className] = true
-                        setTimeout(() => {
-                            cools[model_id][p.className] = false
-                        }, cooltime * 1000)
-                    }
-                })
-            } catch (err) {
-                console.error(`${model_id} 예측 실패:`, err)
-            }
-        }
-        // 200ms 후 반복
-        setTimeout(main, 200)
-    }
-
-
-
-    const tf_loaded = () => {
-        console.log(`Tensorflow.js is loaded ${tf.version.tfjs}`)
-        update_info(`Tensorflow.js 로드 완료.`)
-    }
-
-    const tm_loaded = () => {
-        console.log(`Teachable Machine library is loaded ${tmImage.version}`)
-        update_info(`Teachable Machine 로드 완료.`)
-    }
-
-    const jszip_loaded = () => {
-        console.log('JSZip library is loaded')
-        update_info('JSZip 로드 완료.')
+    const get_time_stamp = () => {
+        const now = new Date()
+        const yy = now.getFullYear().toString().slice(-2)
+        const mm = String(now.getMonth() + 1).padStart(2, '0')
+        const dd = String(now.getDate()).padStart(2, '0')
+        const hh = String(now.getHours()).padStart(2, '0')
+        const min = String(now.getMinutes()).padStart(2, '0')
+        const ss = String(now.getSeconds()).padStart(2, '0')
+        const timestamp = `${yy}${mm}${dd}${hh}${min}${ss}`
+        return timestamp
     }
 
     const go_to_tm = () => {
         window.open('https://teachablemachine.withgoogle.com/', '_blank')
     }
 
-    captureBtn.addEventListener('click', async () => {
+    const btn_record = document.getElementById("btn_record")
+    let capturing = false
+    let capture_interval
+    let captured_images = []
+    btn_record.addEventListener("click", async () => {
+        console.log("캡쳐 녹화 시작")
         if (!capturing) {
-            // --- 캡처 시작 ---
-            update_info('캡처를 시작합니다.')
             capturing = true
-            captureBtn.textContent = '녹화 중지'
-            captureBtn.style.backgroundColor = '#f44336'
-            capturedImages = []
-
-            captureInterval = setInterval(() => {
-                const dataURL = canvas.toDataURL('image/png')
-                capturedImages.push(dataURL)
+            btn_record.textContent = "녹화 중지"
+            captured_images = []
+            capture_interval = setInterval(() => {
+                const data_url = canvas.toDataURL("image/png")
+                captured_images.push(data_url)
             }, 500)
         } else {
-            // --- 캡처 중지 ---
-            update_info('캡처를 중지합니다.')
+            console.log("캡쳐 녹화 중지")
             capturing = false
-            captureBtn.textContent = '녹화 시작'
-            captureBtn.style.backgroundColor = '#4caf50'
-            clearInterval(captureInterval)
+            btn_record.textContent = "캡쳐 녹화"
+            clearInterval(capture_interval)
 
-            if (capturedImages.length === 0) {
-                alert('캡처된 이미지가 없습니다.')
-                return
-            }
+            const timestamp = get_time_stamp()
 
-            // --- 파일명 기준 타임스탬프 생성 (YYMMDDHHMMSS) ---
-            const now = new Date()
-            const yy = now.getFullYear().toString().slice(-2)
-            const mm = String(now.getMonth() + 1).padStart(2, '0')
-            const dd = String(now.getDate()).padStart(2, '0')
-            const hh = String(now.getHours()).padStart(2, '0')
-            const min = String(now.getMinutes()).padStart(2, '0')
-            const ss = String(now.getSeconds()).padStart(2, '0')
-            const timestamp = `${yy}${mm}${dd}${hh}${min}${ss}`
-
-            // --- ZIP 파일로 저장 ---
             const zip = new JSZip()
-            const folder = zip.folder('captures')
+            const folder = zip.folder('')
 
-            capturedImages.forEach((dataURL, i) => {
+            captured_images.forEach((dataURL, i) => {
                 const base64Data = dataURL.split(',')[1]
-                folder.file(`${timestamp}_img${i + 1}.png`, base64Data, { base64: true })
+                folder.file(`${timestamp}_capture${i + 1}.png`, base64Data, { base64: true })
             })
 
             const zipBlob = await zip.generateAsync({ type: 'blob' })
             const link = document.createElement('a')
             link.href = URL.createObjectURL(zipBlob)
             link.download = `captures_${timestamp}.zip`
-            update_info(`녹화한 사진 ${capturedImages.length}장을 ${timestamp}.zip으로 저장했습니다.`)
+            console.log(`녹화한 사진 ${captured_images.length}장을 ${timestamp}.zip으로 저장했습니다.`)
             link.click()
             URL.revokeObjectURL(link.href)
         }
     })
 
+    const save_capture = () => {
+        const data_url = canvas.toDataURL("image/png")
+        const link = document.createElement("a")
+        const timestamp = get_time_stamp()
+        link.href = data_url
+        link.download = `${timestamp}_capture.png`
+        link.click()
+    }
 
-
-    document.getElementById('capture-option').addEventListener('change', (event) => {
-        document.getElementById('capture-option').disabled = true
+    const sel_input = document.getElementById("sel_input")
+    sel_input.addEventListener("change", (event) => {
         const value = event.target.value
-        if (value === 'camera_front') {
-            get_user_camera('user')
-        } else if (value === 'camera_rear') {
-            get_user_camera('environment')
-        } else if (value === 'desktop') {
-            get_user_screen()
-        } else if (value === 'stream') {
-            const url = prompt("Enter Stream URL:", "http://localhost:8000/")
-            get_user_stream(url)
-            console.log("stream selected")
-        }
-        main()
-    })
-
-    document.getElementById('input-option').addEventListener('change', (event) => {
-        document.getElementById('input-option').disabled = true
-        const value = event.target.value
-        if (value === "url") {
-            input_type = "url"
-            set_command_url()
-            return
-        }
-        if (value === "serial") {
-            input_type = "serial"
+        console.log(`입력방법 선택: ${value}`)
+        if (value === "arduino") {
             connect_serial()
-            return
-        }
-        if (value == "ble") {
-            input_type = "ble"
-            mwb_connect()
-            return
+        } else if (value === "server") {
+            set_command_url()
         }
     })
 
-    document.getElementById('model-option').addEventListener('change', (event) => {
-        const value = event.target.value
-        if (value === "url") {
-            add_model_url()
-        } else {
-            add_model_zip()
-        }
-        document.getElementById('model-option').value = "-- 모델 불러오기 --"
-    })
+    const tf_loaded = () => {
+        console.log(`Tensorflow.js is loaded ${tf.version.tfjs}`)
+        tf_ready = true
+        check_libraries()
+    }
 
-    const get_user_camera = async (facing_mode) => {
-        try {
-            // 숨겨진 video 태그 생성
-            const video = document.createElement('video')
-            video.autoplay = true
-            video.playsInline = true
-            video.style.display = 'none'
-            document.body.appendChild(video)
+    const tm_loaded = () => {
+        console.log(`Teachable Machine library is loaded ${tmImage.version}`)
+        tm_ready = true
+        check_libraries()
+    }
 
-            const constraints = { video: { facingMode: facing_mode }, audio: false }
+    const jszip_loaded = () => {
+        console.log('JSZip library is loaded')
+        jszip_ready = true
+        check_libraries()
+    }
 
-            // 카메라 스트림 요청
-            const stream = await navigator.mediaDevices.getUserMedia(constraints)
-            video.srcObject = stream
-
-            // 비디오가 로드되면 캔버스에 반복적으로 그리기
-            video.onloadedmetadata = () => {
-                video.play()
-                const drawFrame = () => {
-                    const cw = canvas.width
-                    const ch = canvas.height
-                    const vw = video.videoWidth
-                    const vh = video.videoHeight
-                    const size = Math.min(vw, vh)
-                    const sx = (vw - size) / 2
-                    const sy = (vh - size) / 2
-                    ctx.drawImage(video, sx, sy, size, size, 0, 0, cw, ch)
-                    requestAnimationFrame(drawFrame)
-                }
-                drawFrame()
-            }
-
-            return video
-        } catch (err) {
-            console.error('Camera access denied or error:', err)
-            return null
+    const check_libraries = () => {
+        if (tf_ready && tm_ready && jszip_ready) {
+            sel_capture.disabled = false
         }
     }
 
-    const get_user_screen = async () => {
-        try {
-            // 숨겨진 video 생성
-            const video = document.createElement('video')
-            video.autoplay = true
-            video.playsInline = true
-            video.style.display = 'none'
-            document.body.appendChild(video)
-
-            // 화면 공유 요청
-            const stream = await navigator.mediaDevices.getDisplayMedia({
-                video: { cursor: 'always' },
-                audio: false
-            })
-
-            video.srcObject = stream
-
-            // 비디오 메타데이터 로드 후 캔버스에 렌더링
-            video.onloadedmetadata = () => {
-                video.play()
-                const drawFrame = () => {
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-                    requestAnimationFrame(drawFrame)
-                }
-                drawFrame()
+    const main_loop = async () => {
+        if (use_roi) {
+            const roi_values = inp_roi.value.split(",").map(v => parseInt(v.trim()))
+            if (roi_values.length === 4) {
+                const [x, y, width, height] = roi_values
+                canvas.width = width
+                canvas.height = height
+                if (video_type === "video") ctx.drawImage(video, x, y, width, height, 0, 0, width, height)
+                else if (video_type === "img") ctx.drawImage(img, x, y, width, height, 0, 0, width, height)
             }
-
-            // 사용자가 화면 공유를 중지했을 때
-            stream.getVideoTracks()[0].addEventListener('ended', () => {
-                console.log('Screen sharing stopped.')
-                ctx.clearRect(0, 0, canvas.width, canvas.height)
-            })
-
-            return video
-        } catch (err) {
-            console.error('Screen capture failed:', err)
-            alert('화면 캡처 권한이 거부되었거나 지원되지 않습니다.')
-            return null
+        } else {
+            if (video_type === "video") {
+                canvas.width = video.videoWidth
+                canvas.height = video.videoHeight
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+            } else if (video_type === "img") {
+                canvas.width = img.width
+                canvas.height = img.height
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+            }
         }
+
+        if (Object.keys(models).length > 0) {
+            for (const model_id in models) {
+                const model = models[model_id]
+                if (!model) continue
+                try {
+                    // const prediction = await model.predict(canvas)
+                    const prediction = await model.predict(model_panels[model_id].img)
+                    update_model_panel(model_id, prediction)
+
+                    prediction.forEach(p => {
+                        const panel = model_panels[model_id]
+                        const row = panel.rows[p.className]
+                        const checked = row.run.checked
+                        const command = convert_command(row.command.value)
+                        const threshold = parseFloat(row.threshold.value)
+                        const cooltime = parseFloat(row.cooltime.value)
+                        const cooling = cools[model_id][p.className]
+                        if (checked && p.probability >= threshold && !cooling) {
+                            if (input_type === "serial") {
+                                send_serial(command)
+                            } else if (input_type === "server") {
+                                send_url(command)
+                            } else {
+                                console.log("입력방법이 설정되지 않았습니다.")
+                            }
+                            cools[model_id][p.className] = true
+                            setTimeout(() => {
+                                cools[model_id][p.className] = false
+                            }, cooltime * 1000)
+                        }
+                    })
+                } catch (err) {
+                    console.error(`${model_id} 예측 실패:`, err)
+                }
+            }
+        }
+        setTimeout(main_loop, delay)
     }
 
     const get_user_stream = (url) => {
-        const interval = 100
-        const cw = canvas.width
-        const ch = canvas.height
-        const img = new Image()
-        img.crossOrigin = 'anonymous'
-        img.src = url
+        const interval = 500
 
+        img.src = url
         let stop = false
 
         img.onload = () => {
-            const draw = () => {
-                if (stop) return
-                ctx.drawImage(img, 0, 0, cw, ch)
-                setTimeout(draw, interval)
-            }
-            draw()
+            sel_capture.disabled = true
+            sel_area.disabled = false
+            inp_roi.value = "0,0," + img.width + "," + img.height
+            video_type = "img"
+            main_loop()
         }
         img.onerror = (e) => {
             console.error('Failed to load stream:', e)
@@ -637,30 +451,77 @@
         }
     }
 
-    const add_model_url = () => {
-        const url = prompt("Enter Teachable Machine Model URL:", "https://teachablemachine.withgoogle.com/models/H8sC205cI")
-        add_model(url)
-        update_info(`${url}에서 모델을 추가합니다.`)
+    const get_user_screen = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { cursor: "always" },
+                audio: false
+            })
+            video.srcObject = stream
+            video.onloadedmetadata = () => {
+                inp_roi.value = "0,0," + window.screen.width + "," + window.screen.height
+                video_type = "video"
+                main_loop()
+            }
+            sel_capture.disabled = true
+            sel_area.disabled = false
+        } catch (err) {
+            console.error("Error: " + err)
+        }
+    }
+
+    const get_user_camera = async (facing_mode) => {
+        try {
+            const constraints = { video: { facingMode: facing_mode }, audio: false }
+            const stream = await navigator.mediaDevices.getUserMedia(constraints)
+            video.srcObject = stream
+            video.onloadedmetadata = () => {
+                inp_roi.value = "0,0," + video.videoWidth + "," + video.videoHeight
+                video_type = "video"
+                main_loop()
+            }
+            sel_capture.disabled = true
+            sel_area.disabled = false
+        } catch (err) {
+            console.error("Error: " + err)
+        }
+    }
+
+    const parse_model_filename = (filename) => {
+        const name = filename.replace(/\.zip$/i, "")
+        const match = name.match(/^(.+?)_(\d+),(\d+),(\d+),(\d+)$/)
+        if (!match) return null
+        return {
+            model_name: match[1],
+            roi: { x: Number(match[2]), y: Number(match[3]), w: Number(match[4]), h: Number(match[5]) }
+        }
     }
 
     const add_model_zip = () => {
-        // 동적으로 file input 생성
-        const fileInput = document.createElement('input')
-        fileInput.type = 'file'
-        fileInput.accept = '.zip'
-        fileInput.style.display = 'none'
+        const fileInput = document.createElement("input")
+        fileInput.type = "file"
+        fileInput.accept = ".zip"
+        fileInput.style.display = "none"
         document.body.appendChild(fileInput)
 
-        // 이벤트 리스너 등록
-        fileInput.addEventListener('change', async (event) => {
-            const file = event.target.files[0]  // 선택한 ZIP 파일
+        fileInput.addEventListener("change", async (event) => {
+            const file = event.target.files[0]
             if (!file) return
+
+            const parsed = parse_model_filename(file.name)
+            if (!parsed) {
+                alert("파일명 형식이 올바르지 않습니다.\n예: test_0,0,300,300.zip")
+                document.body.removeChild(fileInput)
+                return
+            }
+
+            let { model_name, roi } = parsed
+            model_name = file.name.split(".")[0]
 
             try {
                 const jszip = new JSZip()
                 const zip = await jszip.loadAsync(file)
 
-                // ZIP 내 필수 파일 검색 (하위 폴더도 가능)
                 const modelEntry = zip.file(/model\.json$/i)[0]
                 const weightsEntry = zip.file(/weights\.bin$/i)[0]
                 const metadataEntry = zip.file(/metadata\.json$/i)[0]
@@ -671,174 +532,178 @@
                     return
                 }
 
-                // Blob으로 추출
                 const modelBlob = await modelEntry.async("blob")
                 const weightsBlob = await weightsEntry.async("blob")
                 const metadataBlob = await metadataEntry.async("blob")
 
-                // File 객체로 변환 (tmImage.loadFromFiles 사용 가능)
                 const modelFile = new File([modelBlob], "model.json")
                 const weightsFile = new File([weightsBlob], "weights.bin")
                 const metadataFile = new File([metadataBlob], "metadata.json")
 
-                // 모델 로드
-                const model_id = "model_" + model_num
+                const model_id = model_name
                 const new_model = await tmImage.loadFromFiles(modelFile, weightsFile, metadataFile)
-                models[model_id] = new_model
-                console.log(`${model_id} loaded from ZIP`, new_model)
-                model_num++
 
-                // 클래스 이름 가져오기 및 패널 생성
+                models[model_id] = new_model
+                model_rois[model_id] = roi
+
+                console.log(`${model_id} loaded from ZIP`, new_model)
+
+                // 🔹 여기서 바로 테이블 생성
                 const class_names = new_model.getClassLabels()
-                add_panel(model_id, class_names)
+                const panel = create_model_table_panel(model_id, class_names)
+                cools[model_id] = {}
+                for (const class_name of class_names) {
+                    cools[model_id][class_name] = false
+                }
+
+                // 패널 저장해두면 prediction 업데이트할 때 사용 가능
+                model_panels[model_id] = panel
 
             } catch (error) {
                 console.error("모델 로드 실패:", error)
                 alert(`모델 로드 실패: ${error.message}`)
             } finally {
-                // input 제거
                 document.body.removeChild(fileInput)
             }
         })
-        // 파일 선택창 열기
+
         fileInput.click()
-        update_info(`ZIP 파일에서 모델을 추가합니다`)
+        console.log("ZIP 파일에서 모델을 추가합니다")
     }
 
+    const create_model_table_panel = (model_id, class_names) => {
+        const container = document.createElement("fieldset")
+        container.className = "model-container"
+        container.dataset.modelId = model_id
 
-
-    const add_model = async (model_url) => {
-        model_url = model_url.endsWith("/") ? model_url : model_url + "/"
-        const model_id = "model_" + model_num
-        const new_model = await tmImage.load(model_url + "model.json", model_url + "metadata.json")
-        models[model_id] = new_model
-        console.log(`${model_id} loaded from URL:`, new_model)
-        model_num++
-        const class_names = new_model.getClassLabels()
-        add_panel(model_id, class_names)
-    }
-
-    const add_panel = (model_id, class_names) => {
-        cools[model_id] = {}
-        for (const class_name of class_names) {
-            cools[model_id][class_name] = false
-        }
-        const fieldset = document.createElement('fieldset')
-        fieldset.className = 'model-panel'
-
-        const legend = document.createElement('legend')
+        const legend = document.createElement("legend")
         legend.textContent = model_id
-        fieldset.appendChild(legend)
+        container.appendChild(legend)
 
-        // 헤더 행 추가
-        const header = document.createElement('div')
-        header.className = 'header-row'
-        header.innerHTML = `
-        <div>Class</div>
-        <div>Progress</div>
-        <div>Threshold</div>
-        <div>Cooltime</div>
-        <div>Command</div>
-        <div>Run</div> <!-- 추가된 Run 열 -->
+        const img = document.createElement("img")
+
+        const table = document.createElement("table")
+        table.className = "model-table"
+
+        const thead = document.createElement("thead")
+        thead.innerHTML = `
+        <tr>
+            <th>라벨</th>
+            <th>확률</th>
+            <th>임계값</th>
+            <th>쿨타임</th>
+            <th>입력</th>
+            <th>실행</th>
+        </tr>
     `
-        fieldset.appendChild(header)
+        table.appendChild(thead)
 
-        const container = document.createElement('div')
-        container.style.display = 'flex'
-        container.style.flexDirection = 'column'
-        container.style.width = '100%'
-        container.style.gap = '8px'
+        const tbody = document.createElement("tbody")
+        const row_map = {}
 
-        const progressBars = {}
+        class_names.forEach(label => {
+            const tr = document.createElement("tr")
 
-        class_names.forEach(class_name => {
-            const wrapper = document.createElement('div')
-            wrapper.className = 'class-wrapper'
+            const td_label = document.createElement("td")
+            td_label.textContent = label
+            td_label.width = "50px"
 
-            const label = document.createElement('div')
-            label.className = 'class-label'
-            label.textContent = class_name
+            const td_prob = document.createElement("td")
+            td_prob.textContent = "0.00"
+            td_prob.width = "20px"
 
-            const progressWrapper = document.createElement('div')
-            progressWrapper.className = 'progress-wrapper'
+            const td_th = document.createElement("td")
+            td_th.width = "32px"
+            const th_input = document.createElement("input")
+            th_input.type = "text"
+            th_input.value = "0.80"
+            td_th.appendChild(th_input)
 
-            const progressBar = document.createElement('div')
-            progressBar.className = 'progress-bar'
+            const td_ct = document.createElement("td")
+            td_ct.width = "30px"
+            const ct_input = document.createElement("input")
+            ct_input.type = "text"
+            ct_input.value = "3.0"
+            td_ct.appendChild(ct_input)
 
-            const valueDisplay = document.createElement('div')
-            valueDisplay.className = 'value-display'
-            valueDisplay.textContent = '0.00'
+            const td_cmd = document.createElement("td")
+            const cmd_input = document.createElement("input")
+            cmd_input.type = "text"
+            cmd_input.className = "cmd-input"
+            td_cmd.appendChild(cmd_input)
 
-            progressWrapper.appendChild(progressBar)
-            progressWrapper.appendChild(valueDisplay)
+            const td_run = document.createElement("td")
+            td_run.width = "20px"
+            const run_check = document.createElement("input")
+            run_check.type = "checkbox"
+            td_run.appendChild(run_check)
 
-            const thresholdInput = document.createElement('input')
-            thresholdInput.id = `${model_id}_${class_name}_threshold`
-            thresholdInput.type = 'number'
-            thresholdInput.min = 0
-            thresholdInput.max = 1
-            thresholdInput.step = 0.01
-            thresholdInput.value = 0.8
-            thresholdInput.className = 'threshold-input'
+            tr.append(td_label, td_prob, td_th, td_ct, td_cmd, td_run)
+            tbody.appendChild(tr)
 
-            const cooltimeInput = document.createElement('input')
-            cooltimeInput.id = `${model_id}_${class_name}_cooltime`
-            cooltimeInput.type = 'number'
-            cooltimeInput.min = 0
-            cooltimeInput.step = 0.1
-            cooltimeInput.value = 1
-            cooltimeInput.className = 'cooltime-input'
-
-            const messageInput = document.createElement('input')
-            messageInput.id = `${model_id}_${class_name}_input`
-            messageInput.type = 'text'
-            messageInput.placeholder = 'command'
-            messageInput.className = 'message-input'
-
-            // ✔️ Run 체크박스 추가
-            const runCheckbox = document.createElement('input')
-            runCheckbox.type = 'checkbox'
-            runCheckbox.id = `${model_id}_${class_name}_run`
-            runCheckbox.className = 'run-checkbox'
-
-            wrapper.appendChild(label)
-            wrapper.appendChild(progressWrapper)
-            wrapper.appendChild(thresholdInput)
-            wrapper.appendChild(cooltimeInput)
-            wrapper.appendChild(messageInput)
-            wrapper.appendChild(runCheckbox) // 마지막에 추가
-            container.appendChild(wrapper)
-
-            progressBars[class_name] = {
-                progressBar,
-                valueDisplay,
-                thresholdInput,
-                cooltimeInput,
-                messageInput,
-                runCheckbox
+            row_map[label] = {
+                prob: td_prob,
+                threshold: th_input,
+                cooltime: ct_input,
+                command: cmd_input,
+                run: run_check
             }
         })
 
-        fieldset.appendChild(container)
-        document.body.appendChild(fieldset)
+        table.appendChild(tbody)
 
-        panels[model_id] = (class_name, value) => {
-            const bar = progressBars[class_name]
-            if (!bar) return
+        container.appendChild(img)
+        container.appendChild(table)
 
-            const v = Math.max(0, Math.min(1, value))
-            bar.valueDisplay.textContent = v.toFixed(2)
-            bar.progressBar.style.width = `${v * 100}%`
+        document.getElementById("model_container").appendChild(container)
 
-            if (v < 0.3) bar.progressBar.style.background = '#f44336'
-            else if (v < 0.7) bar.progressBar.style.background = '#ffb300'
-            else bar.progressBar.style.background = '#4caf50'
-
-            if (v === 0) bar.valueDisplay.style.marginLeft = '6px'
-            else bar.valueDisplay.style.marginLeft = '0'
-        }
-        Object.keys(progressBars).forEach(name => panels[model_id](name, 0))
+        return { container, img, rows: row_map }
     }
+
+    const update_model_panel = (model_id, prediction) => {
+        const panel = model_panels[model_id]
+        if (!panel) return
+
+        const roi = model_rois[model_id]
+        if (!roi) return
+
+        const { x, y, w, h } = roi
+
+        // =========================
+        // 1. ROI 이미지 업데이트
+        // =========================
+        const tmpCanvas = document.createElement("canvas")
+        tmpCanvas.width = w
+        tmpCanvas.height = h
+        const tctx = tmpCanvas.getContext("2d")
+
+        // video에서 roi 영역 잘라서 그림
+        tctx.drawImage(video, x, y, w, h, 0, 0, w, h)
+
+        panel.img.src = tmpCanvas.toDataURL()
+
+        let maxClass = null
+        let maxProb = -1
+
+        prediction.forEach(p => {
+            if (p.probability > maxProb) {
+                maxProb = p.probability
+                maxClass = p.className
+            }
+        })
+
+        prediction.forEach(p => {
+            const row = panel.rows[p.className]
+            if (!row) return
+            row.prob.textContent = (p.probability).toFixed(2)
+            if (p.className === maxClass) {
+                row.prob.parentElement.style.backgroundColor = "#ffeaa7"
+            } else {
+                row.prob.parentElement.style.backgroundColor = ""
+            }
+        })
+    }
+
 
     let port = null
     let writer = null
@@ -853,7 +718,8 @@
             await port.open({ baudRate: 9600 })
             writer = port.writable.getWriter()
             console.log("✅ Serial connected")
-            update_info("시리얼 연결 완료.")
+            sel_input.disabled = true
+            input_type = "serial"
         } catch (err) {
             console.error("❌ Serial connect error:", err)
             alert("시리얼 연결 실패.")
@@ -862,17 +728,14 @@
 
     async function send_serial(data) {
         if (!writer) {
-            update_info("시리얼이 연결되지 않았습니다.")
             return
         }
         try {
             const buffer = encoder.encode(data)
             await writer.write(buffer)
             console.log("➡️ Sent:", data)
-            update_info(`명령어 전송: ${data}`)
         } catch (err) {
             console.error("❌ Send error:", err)
-            update_info(`명령어 전송 실패: ${data}`)
         }
     }
 
@@ -882,14 +745,14 @@
             if (cmd.includes(",") && cmd.includes("d")) {
                 const x = parseInt(cmd.split(",")[0].slice(1, 5))
                 const y = parseInt(cmd.split(",")[1])
-                const scaled_x = Math.floor((x / screen_width) * 1000)
-                const scaled_y = Math.floor((y / screen_height) * 1000)
+                const scaled_x = Math.floor((x / window.screen.width) * 1000)
+                const scaled_y = Math.floor((y / window.screen.height) * 1000)
                 data_str += `d${scaled_x},${scaled_y} `
             } else if (cmd.includes(",")) {
                 const x = parseInt(cmd.split(",")[0])
                 const y = parseInt(cmd.split(",")[1])
-                const scaled_x = Math.floor((x / screen_width) * 1000)
-                const scaled_y = Math.floor((y / screen_height) * 1000)
+                const scaled_x = Math.floor((x / window.screen.width) * 1000)
+                const scaled_y = Math.floor((y / window.screen.height) * 1000)
                 data_str += `${scaled_x},${scaled_y} `
             } else {
                 data_str += `${cmd} `
@@ -898,22 +761,68 @@
         return data_str
     }
 
-    function mwb_connect() {
-        mwb.uart.start((msg) => {
-            console.log("UART RX:", msg)
-        })
-    }
+    const set_command_url = () => {
+        const url = prompt("Enter Command URL:", "http://localhost:8000/input")
+        if (url) {
+            command_url = url
+            console.log(`Command URL set to: ${command_url}`)
+            sel_input.disabled = true
+            input_type = "server"
 
-    mwb.uart.onConnected = function (device) {
-        console.log("micro:bit connected!", device.name)
-    }
-
-    async function send_ble(data) {
-        try {
-            await mwb.uart.send(data + "\n")
-        } catch (err) {
-            console.error("❌ BLE Send error:", err)
         }
+    }
+
+    const send_url = async (command) => {
+        const url = command_url.endsWith("/") ? command_url + command : command_url + "/" + command
+        try {
+            await fetch(url)
+            console.log(`Sent command: ${command}`)
+        } catch (err) {
+            console.error(`Failed to send command: ${command}`)
+        }
+    }
+
+    const change_delay = () => {
+        const value = prompt("적용할 FPS 값을 입력하세요.")
+        delay = parseInt(1000 / value)
+    }
+
+    function make_circle_coord(r, n, delay) {
+        const cx = window.screen.width / 2
+        const cy = window.screen.height / 2
+        const points = []
+
+        for (let i = 0; i < n; i++) {
+            const angle = (i * 2 * Math.PI) / n
+            const x = Math.round(cx + Math.cos(angle) * r)
+            const y = Math.round(cy + Math.sin(angle) * r)
+            points.push(`${x},${y}`)
+        }
+
+        return points.join(` -${delay} `)
+    }
+
+    function make_square_coord(x, y, w, h, n, delay) {
+        const points = []
+
+        const cols = Math.ceil(Math.sqrt(n * (w / h)))
+        const rows = Math.ceil(n / cols)
+
+        const stepX = w / cols
+        const stepY = h / rows
+
+        let count = 0
+
+        for (let row = 0; row < rows && count < n; row++) {
+            for (let col = 0; col < cols && count < n; col++) {
+                const px = Math.round(x + col * stepX + stepX / 2)
+                const py = Math.round(y + row * stepY + stepY / 2)
+                points.push(`${px},${py}`)
+                count++
+            }
+        }
+
+        return points.join(` -${delay} `)
     }
 
 

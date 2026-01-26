@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>만들오토 2026.01.25</title>
+    <title>만들오토 2026.01.26</title>
     <style>
         body {
             user-select: none;
@@ -825,6 +825,19 @@
 
         return points.join(` -${delay} `)
     }
+
+    document.onload = () => {
+        const ref = document.referrer
+        const token = location.search.includes("mandloh")
+        if (ref.includes("blog") && ref.includes("naver") && token) {
+            console.log("만들오토 시작")
+        } else {
+            alert("만들오토 블로그를 통해 접속해 주세요.")
+            window.location.replace("https://blog.naver.com/mandloh/224160574577")
+        }
+    }
+    
+    
 
 
 

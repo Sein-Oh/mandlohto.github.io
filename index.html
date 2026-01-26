@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>만들오토 2026.01.26</title>
+    <title>만들오토 2026.01.25</title>
     <style>
         body {
             user-select: none;
@@ -285,7 +285,6 @@
     const btn_record = document.getElementById("btn_record")
     let capturing = false
     let capture_interval
-
     let captured_images = []
     btn_record.addEventListener("click", async () => {
         console.log("캡쳐 녹화 시작")
@@ -502,71 +501,65 @@
         const fileInput = document.createElement("input")
         fileInput.type = "file"
         fileInput.accept = ".zip"
+        fileInput.multiple = true
         fileInput.style.display = "none"
         document.body.appendChild(fileInput)
 
         fileInput.addEventListener("change", async (event) => {
-            const file = event.target.files[0]
-            if (!file) return
+            const files = Array.from(event.target.files)
+            if (files.length === 0) return
 
-            const parsed = parse_model_filename(file.name)
-            if (!parsed) {
-                alert("파일명 형식이 올바르지 않습니다.\n예: test_0,0,300,300.zip")
-                document.body.removeChild(fileInput)
-                return
-            }
-
-            let { model_name, roi } = parsed
-            model_name = file.name.split(".")[0]
-
-            try {
-                const jszip = new JSZip()
-                const zip = await jszip.loadAsync(file)
-
-                const modelEntry = zip.file(/model\.json$/i)[0]
-                const weightsEntry = zip.file(/weights\.bin$/i)[0]
-                const metadataEntry = zip.file(/metadata\.json$/i)[0]
-
-                if (!modelEntry || !weightsEntry || !metadataEntry) {
-                    alert("ZIP 파일에 model.json, weights.bin, metadata.json이 모두 있어야 합니다.")
-                    document.body.removeChild(fileInput)
-                    return
+            for (const file of files) {
+                const parsed = parse_model_filename(file.name)
+                if (!parsed) {
+                    alert(`파일명 형식 오류: ${file.name}\n예: test_0,0,300,300.zip`)
+                    continue
                 }
 
-                const modelBlob = await modelEntry.async("blob")
-                const weightsBlob = await weightsEntry.async("blob")
-                const metadataBlob = await metadataEntry.async("blob")
+                const { model_name, roi } = parsed
 
-                const modelFile = new File([modelBlob], "model.json")
-                const weightsFile = new File([weightsBlob], "weights.bin")
-                const metadataFile = new File([metadataBlob], "metadata.json")
+                try {
+                    const jszip = new JSZip()
+                    const zip = await jszip.loadAsync(file)
 
-                const model_id = model_name
-                const new_model = await tmImage.loadFromFiles(modelFile, weightsFile, metadataFile)
+                    const modelEntry = zip.file(/model\.json$/i)[0]
+                    const weightsEntry = zip.file(/weights\.bin$/i)[0]
+                    const metadataEntry = zip.file(/metadata\.json$/i)[0]
 
-                models[model_id] = new_model
-                model_rois[model_id] = roi
+                    if (!modelEntry || !weightsEntry || !metadataEntry) {
+                        alert(`필수 파일 누락: ${file.name}`)
+                        continue
+                    }
 
-                console.log(`${model_id} loaded from ZIP`, new_model)
+                    const modelBlob = await modelEntry.async("blob")
+                    const weightsBlob = await weightsEntry.async("blob")
+                    const metadataBlob = await metadataEntry.async("blob")
 
-                // 🔹 여기서 바로 테이블 생성
-                const class_names = new_model.getClassLabels()
-                const panel = create_model_table_panel(model_id, class_names)
-                cools[model_id] = {}
-                for (const class_name of class_names) {
-                    cools[model_id][class_name] = false
+                    const modelFile = new File([modelBlob], "model.json")
+                    const weightsFile = new File([weightsBlob], "weights.bin")
+                    const metadataFile = new File([metadataBlob], "metadata.json")
+
+                    const model_id = model_name
+                    const new_model = await tmImage.loadFromFiles(modelFile, weightsFile, metadataFile)
+
+                    models[model_id] = new_model
+                    model_rois[model_id] = roi
+
+                    console.log(`${model_id} loaded`, new_model)
+
+                    const class_names = new_model.getClassLabels()
+                    const panel = create_model_table_panel(model_id, class_names)
+                    model_panels[model_id] = panel
+
+                } catch (error) {
+                    console.error(`모델 로드 실패 (${file.name}):`, error)
+                    alert(`모델 로드 실패: ${file.name}`)
                 }
-
-                // 패널 저장해두면 prediction 업데이트할 때 사용 가능
-                model_panels[model_id] = panel
-
-            } catch (error) {
-                console.error("모델 로드 실패:", error)
-                alert(`모델 로드 실패: ${error.message}`)
-            } finally {
-                document.body.removeChild(fileInput)
             }
+
+            document.body.removeChild(fileInput)
         })
+
 
         fileInput.click()
         console.log("ZIP 파일에서 모델을 추가합니다")
@@ -826,7 +819,7 @@
         return points.join(` -${delay} `)
     }
 
-    document.onload = () => {
+    window.onload = () => {
         const ref = document.referrer
         const token = location.search.includes("mandloh")
         if (ref.includes("blog") && ref.includes("naver") && token) {
@@ -836,10 +829,6 @@
             window.location.replace("https://blog.naver.com/mandloh/224160574577")
         }
     }
-    
-    
-
-
 
 </script>
 

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>만들오토 2026.01.26r1</title>
+    <title>만들오토 2026.01.30</title>
     <style>
         body {
             user-select: none;
@@ -102,7 +102,7 @@
         }
 
         .model-container img {
-            width: 96px;
+            width: 100px;
             height: auto;
             object-fit: contain;
             border: 1px solid #ccc;
@@ -165,7 +165,7 @@
 
 <body>
     <fieldset class="container" style="width: 420px; height: 320px;">
-        <legend>미리보기</legend>
+        <legend>캡쳐</legend>
         <div style="display:flex; gap:6px;">
             <select id="sel_capture" disabled="true" style="width:50%">
                 <option value="none">--캡쳐방법 선택--</option>
@@ -205,27 +205,37 @@
             <button style="width:33%;">도움말</button>
         </div>
     </fieldset>
-    <fieldset id="model_container" class="container" style="width:420px;">
-        <legend>모델</legend>
-        <button onclick="add_model_zip()">불러오기</button>
+    <fieldset id="slot_container" class="container" style="width:420px;">
+        <legend>슬롯</legend>
+        <div style="display:flex; gap:6px;">
+            <button style="width:33%;" onclick="add_slot()">이미지, AI모델</button>
+            <button style="width:33%;" onclick="add_hp()">HP분석</button>
+            <button style="width:33%;">타이머</button>
+        </div>
+        <!-- <button onclick="add_slot()">모델 또는 이미지 추가</button> -->
     </fieldset>
+
 </body>
 <script defer src="tf.min.js" onload="tf_loaded()"></script>
 <script defer src="teachablemachine-image.min.js" onload="tm_loaded()"></script>
 <script defer src="jszip.min.js" onload="jszip_loaded()"></script>
+<script async src="opencv.js" onload="cv_loaded()" type="text/javascript"></script>
 <script>
+    const models = {}
+    const imgs = {}
+    const hpParsers = {}
+    let hpParseNum = 1
+
     let tf_ready = false
     let tm_ready = false
     let jszip_ready = false
-    let delay = 300
-
-    const models = {}
-    const model_rois = {}
-    const model_panels = {}
-    const cools = {}
+    let cv_ready = false
+    let delay = 100
 
     const canvas = document.getElementById("canvas")
-    const ctx = canvas.getContext("2d")
+    canvas.width = 400
+    canvas.height = 230
+    const ctx = canvas.getContext("2d", {willReadFrequently:true})
     const video = document.createElement("video")
     video.autoplay = true
 
@@ -360,8 +370,14 @@
         check_libraries()
     }
 
+    const cv_loaded = () => {
+        console.log("Opencv is loaded")
+        cv_ready = true
+        check_libraries()
+    }
+
     const check_libraries = () => {
-        if (tf_ready && tm_ready && jszip_ready) {
+        if (tf_ready && tm_ready && jszip_ready && cv_ready) {
             sel_capture.disabled = false
         }
     }
@@ -390,46 +406,109 @@
 
         if (Object.keys(models).length > 0) {
             for (const model_id in models) {
-                const model = models[model_id]
-                if (!model) continue
-                try {
-                    // const prediction = await model.predict(canvas)
-                    const prediction = await model.predict(model_panels[model_id].img)
-                    update_model_panel(model_id, prediction)
+                const model = models[model_id].model
+                const prediction = await model.predict(models[model_id].panel.img)
+                update_model_panel(model_id, prediction)
 
-                    prediction.forEach(p => {
-                        const panel = model_panels[model_id]
-                        const row = panel.rows[p.className]
-                        const checked = row.run.checked
-                        const command = convert_command(row.command.value)
-                        const threshold = parseFloat(row.threshold.value)
-                        const cooltime = parseFloat(row.cooltime.value)
-                        const cooling = cools[model_id][p.className]
-                        if (checked && p.probability >= threshold && !cooling) {
-                            if (input_type === "serial") {
-                                send_serial(command)
-                            } else if (input_type === "server") {
-                                send_url(command)
-                            } else {
-                                console.log("입력방법이 설정되지 않았습니다.")
-                            }
-                            cools[model_id][p.className] = true
-                            setTimeout(() => {
-                                cools[model_id][p.className] = false
-                            }, cooltime * 1000)
-                        }
-                    })
-                } catch (err) {
-                    console.error(`${model_id} 예측 실패:`, err)
-                }
+                prediction.forEach(p => {
+                    const panel = models[model_id].panel
+                    const row = panel.rows[p.className]
+                    const checked = row.run.checked
+                    // const command = convert_command(row.command.value)
+                    const command = row.command.value
+                    const threshold = parseFloat(row.threshold.value)
+                    const cooltime = parseFloat(row.cooltime.value)
+                    const cooling = models[model_id].cooling[p.className]
+                    if (checked && p.probability >= threshold && !cooling) {
+                        send_command(command, "model", model_id)
+                        models[model_id].cooling[p.className] = true
+                        setTimeout(() => {
+                            models[model_id].cooling[p.className] = false
+                        }, cooltime * 1000)
+                    }
+                })
             }
+        }
+
+        if (Object.keys(imgs).length > 0) {
+            const frame = cv.imread(canvas)
+            for (const key in imgs) {
+                const [x, y, w, h] = imgs[key].ROI
+                const panel = imgs[key].panel
+                const row = panel.rows
+                const checked = row.run.checked
+                // const command = convert_command(row.command.value)
+                const command = row.command.value
+                const threshold = parseFloat(row.threshold.value)
+                const cooltime = parseFloat(row.cooltime.value)
+                const cooling = imgs[key].cooling
+
+                let croppedImg = new cv.Mat()
+                let rect = new cv.Rect(x, y, w, h)
+                croppedImg = frame.roi(rect)
+                const result = new cv.Mat()
+                const mask = new cv.Mat()
+                cv.matchTemplate(imgs[key].img_cv, croppedImg, result, cv.TM_CCOEFF_NORMED, mask)
+                const roc = cv.minMaxLoc(result, mask)
+
+                const cnvTemp = document.createElement("canvas")
+                cnvTemp.width = canvas.width
+                cnvTemp.height = canvas.height
+                const ctxTemp = cnvTemp.getContext("2d", {willReadFrequently:true})
+                ctxTemp.drawImage(canvas, 0, 0)
+                ctxTemp.strokeStyle = "limegreen"
+                ctxTemp.lineWidth = 10
+                ctxTemp.strokeRect(roc.maxLoc.x, roc.maxLoc.y, imgs[key].img_cv.cols, imgs[key].img_cv.rows)
+
+                const winSize = 300
+                const boxCx = Math.round(roc.maxLoc.x + imgs[key].img_cv.cols / 2)
+                const boxCy = Math.round(roc.maxLoc.y + imgs[key].img_cv.rows / 2)
+
+                const imgW = cnvTemp.width
+                const imgH = cnvTemp.height
+
+                let sx = Math.round(boxCx - winSize / 2)
+                let sy = Math.round(boxCy - winSize / 2)
+
+                // 경계 보정
+                if (sx < 0) sx = 0
+                if (sy < 0) sy = 0
+                if (sx + winSize > imgW) sx = imgW - winSize
+                if (sy + winSize > imgH) sy = imgH - winSize
+
+                sx = Math.max(0, sx)
+                sy = Math.max(0, sy)
+
+                const cnvCrop = document.createElement("canvas")
+                cnvCrop.width = winSize
+                cnvCrop.height = winSize
+
+                const ctxCrop = cnvCrop.getContext("2d", { willReadFrequently: true })
+                ctxCrop.drawImage(cnvTemp, sx, sy, winSize, winSize, 0, 0, winSize, winSize)
+
+                imgs[key].pos = [boxCx, boxCy]
+                imgs[key].panel.rows.pos.textContent = `${boxCx},${boxCy}`
+                imgs[key].panel.rows.prob.textContent = roc.maxVal.toFixed(2)
+                imgs[key].panel.img.src = cnvCrop.toDataURL()
+
+                if (checked && roc.maxVal >= threshold && !cooling) {
+                    send_command(command, "img", key)
+                    imgs[key].cooling = true
+                    setTimeout(() => {
+                        imgs[key].cooling = false
+                    }, cooltime * 1000)
+                }
+
+                croppedImg.delete()
+                result.delete()
+                mask.delete()
+            }
+            frame.delete()
         }
         setTimeout(main_loop, delay)
     }
 
     const get_user_stream = (url) => {
-        const interval = 500
-
         img.src = url
         let stop = false
 
@@ -487,218 +566,6 @@
         }
     }
 
-    const parse_model_filename = (filename) => {
-        const name = filename.replace(/\.zip$/i, "")
-        const match = name.match(/^(.+?)_(\d+),(\d+),(\d+),(\d+)$/)
-        if (!match) return null
-        return {
-            model_name: match[1],
-            roi: { x: Number(match[2]), y: Number(match[3]), w: Number(match[4]), h: Number(match[5]) }
-        }
-    }
-
-    const add_model_zip = () => {
-        const fileInput = document.createElement("input")
-        fileInput.type = "file"
-        fileInput.accept = ".zip"
-        fileInput.multiple = true
-        fileInput.style.display = "none"
-        document.body.appendChild(fileInput)
-
-        fileInput.addEventListener("change", async (event) => {
-            const files = Array.from(event.target.files)
-            if (files.length === 0) return
-
-            for (const file of files) {
-                const parsed = parse_model_filename(file.name)
-                if (!parsed) {
-                    alert(`파일명 형식 오류: ${file.name}\n예: test_0,0,300,300.zip`)
-                    continue
-                }
-
-                const { model_name, roi } = parsed
-
-                try {
-                    const jszip = new JSZip()
-                    const zip = await jszip.loadAsync(file)
-
-                    const modelEntry = zip.file(/model\.json$/i)[0]
-                    const weightsEntry = zip.file(/weights\.bin$/i)[0]
-                    const metadataEntry = zip.file(/metadata\.json$/i)[0]
-
-                    if (!modelEntry || !weightsEntry || !metadataEntry) {
-                        alert(`필수 파일 누락: ${file.name}`)
-                        continue
-                    }
-
-                    const modelBlob = await modelEntry.async("blob")
-                    const weightsBlob = await weightsEntry.async("blob")
-                    const metadataBlob = await metadataEntry.async("blob")
-
-                    const modelFile = new File([modelBlob], "model.json")
-                    const weightsFile = new File([weightsBlob], "weights.bin")
-                    const metadataFile = new File([metadataBlob], "metadata.json")
-
-                    const model_id = model_name
-                    const new_model = await tmImage.loadFromFiles(modelFile, weightsFile, metadataFile)
-
-                    models[model_id] = new_model
-                    model_rois[model_id] = roi
-
-                    console.log(`${model_id} loaded`, new_model)
-
-                    const class_names = new_model.getClassLabels()
-                    const panel = create_model_table_panel(model_id, class_names)
-                    model_panels[model_id] = panel
-
-                } catch (error) {
-                    console.error(`모델 로드 실패 (${file.name}):`, error)
-                    alert(`모델 로드 실패: ${file.name}`)
-                }
-            }
-
-            document.body.removeChild(fileInput)
-        })
-
-
-        fileInput.click()
-        console.log("ZIP 파일에서 모델을 추가합니다")
-    }
-
-    const create_model_table_panel = (model_id, class_names) => {
-        const container = document.createElement("fieldset")
-        container.className = "model-container"
-        container.dataset.modelId = model_id
-
-        const legend = document.createElement("legend")
-        legend.textContent = model_id
-        container.appendChild(legend)
-
-        const img = document.createElement("img")
-
-        const table = document.createElement("table")
-        table.className = "model-table"
-
-        const thead = document.createElement("thead")
-        thead.innerHTML = `
-        <tr>
-            <th>라벨</th>
-            <th>확률</th>
-            <th>임계값</th>
-            <th>쿨타임</th>
-            <th>입력</th>
-            <th>실행</th>
-        </tr>
-    `
-        table.appendChild(thead)
-
-        const tbody = document.createElement("tbody")
-        const row_map = {}
-
-        class_names.forEach(label => {
-            const tr = document.createElement("tr")
-
-            const td_label = document.createElement("td")
-            td_label.textContent = label
-            td_label.width = "50px"
-
-            const td_prob = document.createElement("td")
-            td_prob.textContent = "0.00"
-            td_prob.width = "20px"
-
-            const td_th = document.createElement("td")
-            td_th.width = "32px"
-            const th_input = document.createElement("input")
-            th_input.type = "text"
-            th_input.value = "0.80"
-            td_th.appendChild(th_input)
-
-            const td_ct = document.createElement("td")
-            td_ct.width = "30px"
-            const ct_input = document.createElement("input")
-            ct_input.type = "text"
-            ct_input.value = "3.0"
-            td_ct.appendChild(ct_input)
-
-            const td_cmd = document.createElement("td")
-            const cmd_input = document.createElement("input")
-            cmd_input.type = "text"
-            cmd_input.className = "cmd-input"
-            td_cmd.appendChild(cmd_input)
-
-            const td_run = document.createElement("td")
-            td_run.width = "20px"
-            const run_check = document.createElement("input")
-            run_check.type = "checkbox"
-            td_run.appendChild(run_check)
-
-            tr.append(td_label, td_prob, td_th, td_ct, td_cmd, td_run)
-            tbody.appendChild(tr)
-
-            row_map[label] = {
-                prob: td_prob,
-                threshold: th_input,
-                cooltime: ct_input,
-                command: cmd_input,
-                run: run_check
-            }
-        })
-
-        table.appendChild(tbody)
-
-        container.appendChild(img)
-        container.appendChild(table)
-
-        document.getElementById("model_container").appendChild(container)
-
-        return { container, img, rows: row_map }
-    }
-
-    const update_model_panel = (model_id, prediction) => {
-        const panel = model_panels[model_id]
-        if (!panel) return
-
-        const roi = model_rois[model_id]
-        if (!roi) return
-
-        const { x, y, w, h } = roi
-
-        // =========================
-        // 1. ROI 이미지 업데이트
-        // =========================
-        const tmpCanvas = document.createElement("canvas")
-        tmpCanvas.width = w
-        tmpCanvas.height = h
-        const tctx = tmpCanvas.getContext("2d")
-
-        // video에서 roi 영역 잘라서 그림
-        tctx.drawImage(video, x, y, w, h, 0, 0, w, h)
-
-        panel.img.src = tmpCanvas.toDataURL()
-
-        let maxClass = null
-        let maxProb = -1
-
-        prediction.forEach(p => {
-            if (p.probability > maxProb) {
-                maxProb = p.probability
-                maxClass = p.className
-            }
-        })
-
-        prediction.forEach(p => {
-            const row = panel.rows[p.className]
-            if (!row) return
-            row.prob.textContent = (p.probability).toFixed(2)
-            if (p.className === maxClass) {
-                row.prob.parentElement.style.backgroundColor = "#ffeaa7"
-            } else {
-                row.prob.parentElement.style.backgroundColor = ""
-            }
-        })
-    }
-
-
     let port = null
     let writer = null
     const encoder = new TextEncoder()
@@ -733,21 +600,54 @@
         }
     }
 
-    function convert_command(data) {
+    function send_command(cmd, type, id) {
+        const command = convert_command(cmd, type, id)
+        if (input_type === "serial") {
+            send_serial(command)
+        } else if (input_type == "server") {
+            send_url(command)
+        } else {
+            console.log("입력방법이 설정되지 않았습니다.")
+        }
+    }
+
+    function scaled_pos(x, y) {
+        const scaled_x = Math.floor((x / window.screen.width) * 1000)
+        const scaled_y = Math.floor((y / window.screen.height) * 1000)
+        return [scaled_x, scaled_y]
+    }
+
+    function convert_command(data, type, id) {
         let data_str = ""
         data.split(" ").forEach(cmd => {
             if (cmd.includes(",") && cmd.includes("d")) {
                 const x = parseInt(cmd.split(",")[0].slice(1, 5))
                 const y = parseInt(cmd.split(",")[1])
-                const scaled_x = Math.floor((x / window.screen.width) * 1000)
-                const scaled_y = Math.floor((y / window.screen.height) * 1000)
-                data_str += `d${scaled_x},${scaled_y} `
+                const pos = scaled_pos(x, y)
+                data_str += `d${pos.toString()}`
             } else if (cmd.includes(",")) {
                 const x = parseInt(cmd.split(",")[0])
                 const y = parseInt(cmd.split(",")[1])
-                const scaled_x = Math.floor((x / window.screen.width) * 1000)
-                const scaled_y = Math.floor((y / window.screen.height) * 1000)
-                data_str += `${scaled_x},${scaled_y} `
+                const pos = scaled_pos(x, y)
+                data_str += pos.toString()
+            } else if (cmd.includes("@")) {
+                if (cmd === "@대상클릭") {
+                    if (type == "img") {
+                        const x = imgs[id].pos[0]
+                        const y = imgs[id].pos[1]
+                        const pos = scaled_pos(x, y)
+                        data_str = pos.toString()
+                        console.log("찾은 이미지를 클릭합니다.")
+                    }  else if (type == "model") {
+                        const x = Math.round(models[id].ROI[0] + (models[id].ROI[2] / 2))
+                        const y = Math.round(models[id].ROI[1] + (models[id].ROI[3] / 2))
+                        const pos = scaled_pos(x, y)
+                        data_str = pos.toString()
+                        console.log("캡쳐영역 중심을 클릭합니다.")
+                    } else {
+                        console.log("지원하지 않는 입력입니다.")
+                    }
+                }
             } else {
                 data_str += `${cmd} `
             }
@@ -819,16 +719,409 @@
         return points.join(` -${delay} `)
     }
 
-    window.onload = () => {
-        const ref = document.referrer
-        const token = location.search.includes("mandloh")
-        if (ref.includes("blog") && ref.includes("naver") && token) {
-            console.log("만들오토 시작")
-        } else {
-            alert("만들오토 블로그를 통해 접속해 주세요.")
-            window.location.replace("https://blog.naver.com/mandloh/224160574577")
-        }
+    const add_slot = () => {
+        const fileInput = document.createElement("input")
+        fileInput.type = "file"
+        fileInput.multiple = true
+        fileInput.style.display = "none"
+        fileInput.addEventListener("change", async (event) => {
+            const files = event.target.files
+            for (file of files) {
+                const prefix = file.name.split(".")[1]
+                if (prefix === "zip") add_model_zip(file)
+                else if (['png', 'PNG', 'jpg', 'JPG', 'jpeg', 'JPEG', 'webp', 'WEBP'].includes(prefix)) add_img(file)
+            }
+        })
+        fileInput.click()
     }
+
+    const add_model_zip = async (file) => {
+        const part = file.name.split("_")
+        if (part.length < 2) {
+            alert("파일명에 ROI 정보가 없습니다.")
+            return
+        }
+        const fileName = file.name.split(".")[0]
+        if (models[fileName]) {
+            alert("이미 추가한 파일입니다.")
+            return
+        }
+        const roi_ary = fileName.split("_")[1].split(",").map(Number)
+        if (roi_ary.length !== 4) {
+            alert(`${roi_ary.toString()}. ROI 형식이 잘못되었습니다.`)
+            return
+        }
+
+        const jszip = new JSZip()
+        const zip = await jszip.loadAsync(file)
+
+        const modelEntry = zip.file(/model\.json$/i)[0]
+        const weightsEntry = zip.file(/weights\.bin$/i)[0]
+        const metadataEntry = zip.file(/metadata\.json$/i)[0]
+
+        if (!modelEntry || !weightsEntry || !metadataEntry) {
+            alert("ZIP 파일에 model.json, weights.bin, metadata.json이 모두 있어야 합니다.")
+            document.body.removeChild(fileInput)
+            return
+        }
+
+        const modelBlob = await modelEntry.async("blob")
+        const weightsBlob = await weightsEntry.async("blob")
+        const metadataBlob = await metadataEntry.async("blob")
+
+        const modelFile = new File([modelBlob], "model.json")
+        const weightsFile = new File([weightsBlob], "weights.bin")
+        const metadataFile = new File([metadataBlob], "metadata.json")
+
+        const new_model = await tmImage.loadFromFiles(modelFile, weightsFile, metadataFile)
+        const classNames = new_model.getClassLabels()
+        models[fileName] = {}
+        models[fileName]["model"] = new_model
+        models[fileName]["ROI"] = roi_ary
+        models[fileName]["classNames"] = classNames
+        const panel = create_model_panel(fileName, classNames)
+        models[fileName]["panel"] = panel
+        models[fileName]["cooling"] = {}
+        classNames.forEach(cls => {
+            models[fileName]["cooling"][cls] = false
+        })
+    }
+
+    const create_model_panel = (fileName, classNames) => {
+        const container = document.createElement("fieldset")
+        container.className = "model-container"
+        container.dataset.modelId = fileName
+        const legend = document.createElement("legend")
+        legend.textContent = fileName
+        container.appendChild(legend)
+
+        const img = document.createElement("img")
+        const table = document.createElement("table")
+        table.className = "model-table"
+        const thead = document.createElement("thead")
+        thead.innerHTML = `
+            <tr>
+                <th>라벨</th>
+                <th>확률</th>
+                <th>임계값</th>
+                <th>쿨타임</th>
+                <th>입력</th>
+                <th>실행</th>
+            </tr>
+            `
+        table.appendChild(thead)
+
+        const tbody = document.createElement("tbody")
+        const row_map = {}
+
+        classNames.forEach(label => {
+            const tr = document.createElement("tr")
+
+            const td_label = document.createElement("td")
+            td_label.textContent = label
+            td_label.width = "50px"
+
+            const td_prob = document.createElement("td")
+            td_prob.textContent = "0.00"
+            td_prob.width = "20px"
+
+            const td_th = document.createElement("td")
+            td_th.width = "32px"
+            const th_input = document.createElement("input")
+            th_input.type = "text"
+            th_input.value = "0.80"
+            td_th.appendChild(th_input)
+
+            const td_ct = document.createElement("td")
+            td_ct.width = "30px"
+            const ct_input = document.createElement("input")
+            ct_input.type = "text"
+            ct_input.value = "3.0"
+            td_ct.appendChild(ct_input)
+
+            const td_cmd = document.createElement("td")
+            const cmd_input = document.createElement("input")
+            cmd_input.type = "text"
+            cmd_input.className = "cmd-input"
+            td_cmd.appendChild(cmd_input)
+
+            const td_run = document.createElement("td")
+            td_run.width = "20px"
+            const run_check = document.createElement("input")
+            run_check.type = "checkbox"
+            td_run.appendChild(run_check)
+
+            tr.append(td_label, td_prob, td_th, td_ct, td_cmd, td_run)
+            tbody.appendChild(tr)
+
+            row_map[label] = {
+                prob: td_prob,
+                threshold: th_input,
+                cooltime: ct_input,
+                command: cmd_input,
+                run: run_check
+            }
+        })
+        table.appendChild(tbody)
+        container.appendChild(img)
+        container.appendChild(table)
+        document.getElementById("slot_container").appendChild(container)
+        return { container, img, rows: row_map }
+    }
+
+    const update_model_panel = (fileName, prediction) => {
+        const panel = models[fileName]["panel"]
+        if (!panel) {
+            alert("패널이 생성되지 않았습니다.")
+            return
+        }
+        const [x, y, w, h] = models[fileName]["ROI"]
+        const tmpCanvas = document.createElement("canvas")
+        tmpCanvas.width = w
+        tmpCanvas.height = h
+        const tctx = tmpCanvas.getContext("2d", {willReadFrequently:true})
+
+        tctx.drawImage(video, x, y, w, h, 0, 0, w, h)
+        panel.img.src = tmpCanvas.toDataURL()
+
+        let maxClass = null
+        let maxProb = -1
+
+        prediction.forEach(p => {
+            if (p.probability > maxProb) {
+                maxProb = p.probability
+                maxClass = p.className
+            }
+        })
+
+        prediction.forEach(p => {
+            const row = panel.rows[p.className]
+            if (!row) return
+            row.prob.textContent = (p.probability).toFixed(2)
+            if (p.className === maxClass) {
+                row.prob.parentElement.style.backgroundColor = "#ffeaa7"
+            } else {
+                row.prob.parentElement.style.backgroundColor = ""
+            }
+        })
+    }
+
+    const add_img = (file) => {
+        const part = file.name.split("_")
+        if (part.length < 2) {
+            alert("파일명에 ROI 정보가 없습니다.")
+            return
+        }
+        const fileName = file.name.split(".")[0]
+        if (imgs[fileName]) {
+            alert("이미 추가한 파일입니다.")
+            return
+        }
+        const roi_ary = fileName.split("_")[1].split(",").map(Number)
+        if (roi_ary.length !== 4) {
+            alert(`${roi_ary.toString()}. ROI 형식이 잘못되었습니다.`)
+            return
+        }
+
+        const panel = create_img_panel(fileName)
+        imgs[fileName] = {}
+        imgs[fileName]["ROI"] = roi_ary
+        imgs[fileName]["panel"] = panel
+        imgs[fileName]["cooling"] = false
+        imgs[fileName]["pos"] = [0, 0]
+
+
+        const img = new Image()
+        const reader = new FileReader()
+        reader.onloadend = (e) => {
+            img.onload = () => {
+                const cnv = document.createElement("canvas")
+                cnv.width = img.naturalWidth
+                cnv.height = img.naturalHeight
+                const ctx = cnv.getContext("2d", {willReadFrequently:true})
+                ctx.drawImage(img, 0, 0)
+                const mat = cv.imread(cnv)
+                imgs[fileName]["img_cv"] = mat
+            }
+            img.src = e.target.result
+        }
+        reader.readAsDataURL(file)
+    }
+
+    const create_img_panel = (fileName) => {
+        const container = document.createElement("fieldset")
+        container.className = "model-container"
+        container.dataset.modelId = fileName
+        const legend = document.createElement("legend")
+        legend.textContent = fileName
+        container.appendChild(legend)
+        const img = document.createElement("img")
+        const table = document.createElement("table")
+        table.className = "model-table"
+        const thead = document.createElement("thead")
+        thead.innerHTML = `
+            <tr>
+                <th>위치</th>
+                <th>확률</th>
+                <th>임계값</th>
+                <th>쿨타임</th>
+                <th>입력</th>
+                <th>실행</th>
+            </tr>
+            `
+        table.appendChild(thead)
+
+        const tbody = document.createElement("tbody")
+
+        const tr = document.createElement("tr")
+
+        const td_pos = document.createElement("td")
+        td_pos.textContent = "0,0"
+        td_pos.width = "50px"
+
+        const td_prob = document.createElement("td")
+        td_prob.textContent = "0.00"
+        td_prob.width = "20px"
+
+        const td_th = document.createElement("td")
+        td_th.width = "32px"
+        const th_input = document.createElement("input")
+        th_input.type = "text"
+        th_input.value = "0.80"
+        td_th.appendChild(th_input)
+
+        const td_ct = document.createElement("td")
+        td_ct.width = "30px"
+        const ct_input = document.createElement("input")
+        ct_input.type = "text"
+        ct_input.value = "3.0"
+        td_ct.appendChild(ct_input)
+
+        const td_cmd = document.createElement("td")
+        const cmd_input = document.createElement("input")
+        cmd_input.type = "text"
+        cmd_input.className = "cmd-input"
+        td_cmd.appendChild(cmd_input)
+
+        const td_run = document.createElement("td")
+        td_run.width = "20px"
+        const run_check = document.createElement("input")
+        run_check.type = "checkbox"
+        td_run.appendChild(run_check)
+
+        tr.append(td_pos, td_prob, td_th, td_ct, td_cmd, td_run)
+        tbody.appendChild(tr)
+        table.appendChild(tbody)
+        container.appendChild(img)
+        container.appendChild(table)
+        document.getElementById("slot_container").appendChild(container)
+
+        const row_map = {
+            pos: td_pos,
+            prob: td_prob,
+            threshold: th_input,
+            cooltime: ct_input,
+            command: cmd_input,
+            run: run_check
+        }
+        return { container, img, rows: row_map }
+    }
+
+    const add_hp = () => {
+        const name = `hpParser${hpParseNum}`
+        hpParseNum += 1
+        const panel = add_hp_panel(name)
+        hpParsers[name] = {}
+        hpParsers[name]["panel"] = panel
+        hpParsers[name]["cooling"] = false
+    }
+
+    const add_hp_panel = (label) => {
+        const container = document.createElement("fieldset")
+        container.className = "model-container"
+        container.dataset.modelId = label
+        const legend = document.createElement("legend")
+        legend.textContent = label
+        container.appendChild(legend)
+        const img = document.createElement("img")
+        const table = document.createElement("table")
+        table.className = "model-table"
+        const thead = document.createElement("thead")
+        thead.innerHTML = `
+            <tr>
+                <th>캡쳐위치</th>
+                <th>입력범위</th>
+                <th>쿨타임</th>
+                <th>입력</th>
+                <th>실행</th>
+            </tr>
+            `
+        table.appendChild(thead)
+
+        const tbody = document.createElement("tbody")
+        const tr = document.createElement("tr")
+        
+        const td_roi = document.createElement("td")
+        td_roi.width = "60px"
+        const th_input_roi = document.createElement("input")
+        th_input_roi.type = "text"
+        th_input_roi.value = "0,0,200,10"
+        td_roi.appendChild(th_input_roi)
+
+        const td_range = document.createElement("td")
+        td_range.width = "40px"
+        const th_input_range = document.createElement("input")
+        th_input_range.type = "text"
+        th_input_range.value = "0,50"
+        td_range.appendChild(th_input_range)
+
+        const td_ct = document.createElement("td")
+        td_ct.width = "30px"
+        const ct_input = document.createElement("input")
+        ct_input.type = "text"
+        ct_input.value = "3.0"
+        td_ct.appendChild(ct_input)
+
+        const td_cmd = document.createElement("td")
+        const cmd_input = document.createElement("input")
+        cmd_input.type = "text"
+        cmd_input.className = "cmd-input"
+        td_cmd.appendChild(cmd_input)
+
+        const td_run = document.createElement("td")
+        td_run.width = "20px"
+        const run_check = document.createElement("input")
+        run_check.type = "checkbox"
+        td_run.appendChild(run_check)
+
+        tr.append(td_roi, td_range, td_ct, td_cmd, td_run)
+        tbody.appendChild(tr)
+        table.appendChild(tbody)
+        container.appendChild(img)
+        container.appendChild(table)
+        document.getElementById("slot_container").appendChild(container)
+        
+        const row_map = {
+            roi: th_input_roi,
+            range: th_input_range,
+            cooltime: ct_input,
+            command: cmd_input,
+            run: run_check
+        }
+        return { container, img, rows: row_map }
+    }
+
+
+    // window.onload = () => {
+    //     const ref = document.referrer
+    //     const token = location.search.includes("mandloh")
+    //     if (ref.includes("blog") && ref.includes("naver") && token) {
+    //         console.log("만들오토 시작")
+    //     } else {
+    //         alert("만들오토 블로그를 통해 접속해 주세요.")
+    //         window.location.replace("https://blog.naver.com/mandloh/224160574577")
+    //     }
+    // }
 
 </script>
 

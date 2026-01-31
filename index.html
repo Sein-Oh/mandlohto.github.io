@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>만들오토 v1.0</title>
+    <title>만들오토 v1.1</title>
     <style>
         body {
             user-select: none;
@@ -219,6 +219,7 @@
 <script defer src="teachablemachine-image.min.js" onload="tm_loaded()"></script>
 <script defer src="jszip.min.js" onload="jszip_loaded()"></script>
 <script async src="opencv.js" onload="cv_loaded()" type="text/javascript"></script>
+
 <script>
     let show_delay = false
 
@@ -1169,7 +1170,6 @@
         }
         return { container, rows: row_map }
     }
-
 
     window.onload = () => {
         const ref = document.referrer

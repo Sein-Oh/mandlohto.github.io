@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>만들오토 v1.1</title>
+    <title>만들오토 v1.0 r1</title>
     <style>
         body {
             user-select: none;
@@ -194,11 +194,20 @@
     </fieldset>
     <fieldset class="container" style="width:420px;">
         <legend>설정</legend>
-        <select id="sel_input">
-            <option value="none">--입력방법 선택--</option>
-            <option value="arduino">아두이노</option>
-            <option value="server">서버</option>
-        </select>
+        <div style="display:flex; gap:6px;">
+            <select id="sel_input" style="width:50%">
+                <option value="none">--입력방법 선택--</option>
+                <option value="arduino">아두이노</option>
+                <option value="server">서버</option>
+            </select>
+            <div style="display:flex; gap:6px; width:50%">
+                <span style="margin-left:20px">화면 해상도</span>
+                <input id="screen_width" type="text" style="width:15%" value="1920">
+                <span>x</span>
+                <input id="screen_height" type="text" style="width:15%" value="1080">
+            </div>
+        </div>
+        
         <div style="display:flex; gap:6px;">
             <button style="width:33%;" onclick="change_delay()">FPS 설정</button>
             <button style="width:33%;" onclick="go_to_tm()">학습사이트</button>
@@ -222,10 +231,11 @@
 
 <script>
     let show_delay = false
+    const screen_width = document.getElementById("screen_width")
+    const screen_height = document.getElementById("screen_height")
 
     let cvFrame = null
     let cvGray = null
-    // let cvResult = null
 
     const tempCanvas = document.createElement("canvas")
     const tempCtx = tempCanvas.getContext("2d", { willReadFrequently: true })
@@ -575,7 +585,7 @@
             })
             video.srcObject = stream
             video.onloadedmetadata = () => {
-                inp_roi.value = "0,0," + window.screen.width + "," + window.screen.height
+                inp_roi.value = "0,0," + Number(screen_width.value) + "," + Number(screen_height.value)
                 video_type = "video"
                 main_loop()
             }
@@ -649,8 +659,8 @@
     }
 
     function scaled_pos(x, y) {
-        const scaled_x = Math.floor((x / window.screen.width) * 1000)
-        const scaled_y = Math.floor((y / window.screen.height) * 1000)
+        const scaled_x = Math.floor((x / Number(screen_width.value)) * 1000)
+        const scaled_y = Math.floor((y / Number(screen_height.value)) * 1000)
         return [scaled_x, scaled_y]
     }
 
@@ -719,8 +729,8 @@
     }
 
     function make_circle_coord(r, n, delay) {
-        const cx = window.screen.width / 2
-        const cy = window.screen.height / 2
+        const cx = Number(screen_width.value) / 2
+        const cy = Number(screen_height.value) / 2
         const points = []
 
         for (let i = 0; i < n; i++) {
@@ -1170,6 +1180,7 @@
         }
         return { container, rows: row_map }
     }
+
 
     window.onload = () => {
         const ref = document.referrer

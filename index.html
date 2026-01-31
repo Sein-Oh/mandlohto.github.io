@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>만들오토 2026.01.30</title>
+    <title>만들오토 2026.01.31</title>
     <style>
         body {
             user-select: none;
@@ -102,7 +102,7 @@
         }
 
         .model-container img {
-            width: 100px;
+            width: 80px;
             height: auto;
             object-fit: contain;
             border: 1px solid #ccc;
@@ -208,11 +208,10 @@
     <fieldset id="slot_container" class="container" style="width:420px;">
         <legend>슬롯</legend>
         <div style="display:flex; gap:6px;">
-            <button style="width:33%;" onclick="add_slot()">이미지, AI모델</button>
-            <button style="width:33%;" onclick="add_hp()">HP분석</button>
-            <button style="width:33%;">타이머</button>
+            <button style="width:33%;" onclick="add_slot_ai()">AI모델</button>
+            <button style="width:33%;" onclick="add_slot_img()">이미지 찾기</button>
+            <button style="width:33%;" onclick="add_slot_timer()">타이머</button>
         </div>
-        <!-- <button onclick="add_slot()">모델 또는 이미지 추가</button> -->
     </fieldset>
 
 </body>
@@ -221,10 +220,22 @@
 <script defer src="jszip.min.js" onload="jszip_loaded()"></script>
 <script async src="opencv.js" onload="cv_loaded()" type="text/javascript"></script>
 <script>
+    let show_delay = false
+
+    let cvFrame = null
+    let cvGray = null
+    // let cvResult = null
+
+    const tempCanvas = document.createElement("canvas")
+    const tempCtx = tempCanvas.getContext("2d", { willReadFrequently: true })
+
+    const cropCanvas = document.createElement("canvas")
+    const cropCtx = cropCanvas.getContext("2d", { willReadFrequently: true })
+
     const models = {}
     const imgs = {}
-    const hpParsers = {}
-    let hpParseNum = 1
+    const timers = {}
+    let timerNum = 1
 
     let tf_ready = false
     let tm_ready = false
@@ -235,7 +246,7 @@
     const canvas = document.getElementById("canvas")
     canvas.width = 400
     canvas.height = 230
-    const ctx = canvas.getContext("2d", {willReadFrequently:true})
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })
     const video = document.createElement("video")
     video.autoplay = true
 
@@ -379,10 +390,12 @@
     const check_libraries = () => {
         if (tf_ready && tm_ready && jszip_ready && cv_ready) {
             sel_capture.disabled = false
+            main_loop()
         }
     }
 
     const main_loop = async () => {
+        const start = performance.now()
         if (use_roi) {
             const roi_values = inp_roi.value.split(",").map(v => parseInt(v.trim()))
             if (roi_values.length === 4) {
@@ -414,7 +427,6 @@
                     const panel = models[model_id].panel
                     const row = panel.rows[p.className]
                     const checked = row.run.checked
-                    // const command = convert_command(row.command.value)
                     const command = row.command.value
                     const threshold = parseFloat(row.threshold.value)
                     const cooltime = parseFloat(row.cooltime.value)
@@ -431,13 +443,19 @@
         }
 
         if (Object.keys(imgs).length > 0) {
-            const frame = cv.imread(canvas)
+            if (!cvFrame) {
+                cvFrame = new cv.Mat(canvas.height, canvas.width, cv.CV_8UC4)
+                cvGray = new cv.Mat()
+            }
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+            cvFrame.data.set(imgData.data)
+            cv.cvtColor(cvFrame, cvGray, cv.COLOR_RGBA2GRAY)
+
             for (const key in imgs) {
                 const [x, y, w, h] = imgs[key].ROI
                 const panel = imgs[key].panel
                 const row = panel.rows
                 const checked = row.run.checked
-                // const command = convert_command(row.command.value)
                 const command = row.command.value
                 const threshold = parseFloat(row.threshold.value)
                 const cooltime = parseFloat(row.cooltime.value)
@@ -445,16 +463,15 @@
 
                 let croppedImg = new cv.Mat()
                 let rect = new cv.Rect(x, y, w, h)
-                croppedImg = frame.roi(rect)
+                croppedImg = cvGray.roi(rect)
                 const result = new cv.Mat()
-                const mask = new cv.Mat()
-                cv.matchTemplate(imgs[key].img_cv, croppedImg, result, cv.TM_CCOEFF_NORMED, mask)
-                const roc = cv.minMaxLoc(result, mask)
+                cv.matchTemplate(imgs[key].img_cv, croppedImg, result, cv.TM_CCOEFF_NORMED)
+                const roc = cv.minMaxLoc(result)
 
                 const cnvTemp = document.createElement("canvas")
                 cnvTemp.width = canvas.width
                 cnvTemp.height = canvas.height
-                const ctxTemp = cnvTemp.getContext("2d", {willReadFrequently:true})
+                const ctxTemp = cnvTemp.getContext("2d")
                 ctxTemp.drawImage(canvas, 0, 0)
                 ctxTemp.strokeStyle = "limegreen"
                 ctxTemp.lineWidth = 10
@@ -483,7 +500,7 @@
                 cnvCrop.width = winSize
                 cnvCrop.height = winSize
 
-                const ctxCrop = cnvCrop.getContext("2d", { willReadFrequently: true })
+                const ctxCrop = cnvCrop.getContext("2d")
                 ctxCrop.drawImage(cnvTemp, sx, sy, winSize, winSize, 0, 0, winSize, winSize)
 
                 imgs[key].pos = [boxCx, boxCy]
@@ -498,12 +515,30 @@
                         imgs[key].cooling = false
                     }, cooltime * 1000)
                 }
-
                 croppedImg.delete()
                 result.delete()
-                mask.delete()
             }
-            frame.delete()
+        }
+
+        if (Object.keys(timers).length > 0) {
+            for (const key in timers) {
+                const panel = timers[key].panel
+                const checked = panel.rows.run.checked
+                const command = panel.rows.command.value
+                const cooltime = parseFloat(panel.rows.cooltime.value)
+                const cooling = timers[key].cooling
+                if (checked && !cooling) {
+                    send_command(command, "timer", null)
+                    timers[key].cooling = true
+                    setTimeout(() => {
+                        timers[key].cooling = false
+                    }, cooltime * 1000)
+                }
+            }
+        }
+
+        if (show_delay) {
+            console.log(performance.now() - start)
         }
         setTimeout(main_loop, delay)
     }
@@ -517,7 +552,7 @@
             sel_area.disabled = false
             inp_roi.value = "0,0," + img.width + "," + img.height
             video_type = "img"
-            main_loop()
+            //main_loop()
         }
         img.onerror = (e) => {
             console.error('Failed to load stream:', e)
@@ -540,7 +575,7 @@
             video.onloadedmetadata = () => {
                 inp_roi.value = "0,0," + window.screen.width + "," + window.screen.height
                 video_type = "video"
-                main_loop()
+                //main_loop()
             }
             sel_capture.disabled = true
             sel_area.disabled = false
@@ -557,7 +592,7 @@
             video.onloadedmetadata = () => {
                 inp_roi.value = "0,0," + video.videoWidth + "," + video.videoHeight
                 video_type = "video"
-                main_loop()
+                //main_loop()
             }
             sel_capture.disabled = true
             sel_area.disabled = false
@@ -638,7 +673,7 @@
                         const pos = scaled_pos(x, y)
                         data_str = pos.toString()
                         console.log("찾은 이미지를 클릭합니다.")
-                    }  else if (type == "model") {
+                    } else if (type == "model") {
                         const x = Math.round(models[id].ROI[0] + (models[id].ROI[2] / 2))
                         const y = Math.round(models[id].ROI[1] + (models[id].ROI[3] / 2))
                         const pos = scaled_pos(x, y)
@@ -717,6 +752,46 @@
         }
 
         return points.join(` -${delay} `)
+    }
+
+    const add_slot_ai = () => {
+        const fileInput = document.createElement("input")
+        fileInput.type = "file"
+        fileInput.multiple = true
+        fileInput.style.display = "none"
+        fileInput.addEventListener("change", async (event) => {
+            const files = event.target.files
+            for (file of files) {
+                const prefix = file.name.split(".")[1]
+                if (prefix === "zip") {
+                    add_model_zip(file)
+                } else {
+                    alert("zip 파일만 추가할 수 있습니다.")
+                    return
+                }
+            }
+        })
+        fileInput.click()
+    }
+
+    const add_slot_img = () => {
+        const fileInput = document.createElement("input")
+        fileInput.type = "file"
+        fileInput.multiple = true
+        fileInput.style.display = "none"
+        fileInput.addEventListener("change", async (event) => {
+            const files = event.target.files
+            for (file of files) {
+                const prefix = file.name.split(".")[1]
+                if (['png', 'PNG', 'jpg', 'JPG', 'jpeg', 'JPEG', 'webp', 'WEBP'].includes(prefix)) {
+                    add_img(file)
+                } else {
+                    alert("이미지 파일만 추가할 수 있습니다.")
+                    return
+                }
+            }
+        })
+        fileInput.click()
     }
 
     const add_slot = () => {
@@ -879,7 +954,7 @@
         const tmpCanvas = document.createElement("canvas")
         tmpCanvas.width = w
         tmpCanvas.height = h
-        const tctx = tmpCanvas.getContext("2d", {willReadFrequently:true})
+        const tctx = tmpCanvas.getContext("2d", { willReadFrequently: true })
 
         tctx.drawImage(video, x, y, w, h, 0, 0, w, h)
         panel.img.src = tmpCanvas.toDataURL()
@@ -938,10 +1013,13 @@
                 const cnv = document.createElement("canvas")
                 cnv.width = img.naturalWidth
                 cnv.height = img.naturalHeight
-                const ctx = cnv.getContext("2d", {willReadFrequently:true})
+                const ctx = cnv.getContext("2d", { willReadFrequently: true })
                 ctx.drawImage(img, 0, 0)
                 const mat = cv.imread(cnv)
-                imgs[fileName]["img_cv"] = mat
+                const gray = new cv.Mat()
+                cv.cvtColor(mat, gray, cv.COLOR_RGBA2GRAY)
+                mat.delete()
+                imgs[fileName]["img_cv"] = gray
             }
             img.src = e.target.result
         }
@@ -1027,30 +1105,27 @@
         return { container, img, rows: row_map }
     }
 
-    const add_hp = () => {
-        const name = `hpParser${hpParseNum}`
-        hpParseNum += 1
-        const panel = add_hp_panel(name)
-        hpParsers[name] = {}
-        hpParsers[name]["panel"] = panel
-        hpParsers[name]["cooling"] = false
+    const add_slot_timer = () => {
+        const name = `timer${timerNum}`
+        timerNum += 1
+        const panel = add_timer_panel(name)
+        timers[name] = {}
+        timers[name]["panel"] = panel
+        timers[name]["cooling"] = false
     }
 
-    const add_hp_panel = (label) => {
+    const add_timer_panel = (label) => {
         const container = document.createElement("fieldset")
         container.className = "model-container"
         container.dataset.modelId = label
         const legend = document.createElement("legend")
         legend.textContent = label
         container.appendChild(legend)
-        const img = document.createElement("img")
         const table = document.createElement("table")
         table.className = "model-table"
         const thead = document.createElement("thead")
         thead.innerHTML = `
             <tr>
-                <th>캡쳐위치</th>
-                <th>입력범위</th>
                 <th>쿨타임</th>
                 <th>입력</th>
                 <th>실행</th>
@@ -1060,23 +1135,9 @@
 
         const tbody = document.createElement("tbody")
         const tr = document.createElement("tr")
-        
-        const td_roi = document.createElement("td")
-        td_roi.width = "60px"
-        const th_input_roi = document.createElement("input")
-        th_input_roi.type = "text"
-        th_input_roi.value = "0,0,200,10"
-        td_roi.appendChild(th_input_roi)
-
-        const td_range = document.createElement("td")
-        td_range.width = "40px"
-        const th_input_range = document.createElement("input")
-        th_input_range.type = "text"
-        th_input_range.value = "0,50"
-        td_range.appendChild(th_input_range)
 
         const td_ct = document.createElement("td")
-        td_ct.width = "30px"
+        td_ct.width = "60px"
         const ct_input = document.createElement("input")
         ct_input.type = "text"
         ct_input.value = "3.0"
@@ -1094,34 +1155,31 @@
         run_check.type = "checkbox"
         td_run.appendChild(run_check)
 
-        tr.append(td_roi, td_range, td_ct, td_cmd, td_run)
+        tr.append(td_ct, td_cmd, td_run)
         tbody.appendChild(tr)
         table.appendChild(tbody)
-        container.appendChild(img)
         container.appendChild(table)
         document.getElementById("slot_container").appendChild(container)
-        
+
         const row_map = {
-            roi: th_input_roi,
-            range: th_input_range,
             cooltime: ct_input,
             command: cmd_input,
             run: run_check
         }
-        return { container, img, rows: row_map }
+        return { container, rows: row_map }
     }
 
 
-    // window.onload = () => {
-    //     const ref = document.referrer
-    //     const token = location.search.includes("mandloh")
-    //     if (ref.includes("blog") && ref.includes("naver") && token) {
-    //         console.log("만들오토 시작")
-    //     } else {
-    //         alert("만들오토 블로그를 통해 접속해 주세요.")
-    //         window.location.replace("https://blog.naver.com/mandloh/224160574577")
-    //     }
-    // }
+    window.onload = () => {
+        const ref = document.referrer
+        const token = location.search.includes("mandloh")
+        if (ref.includes("blog") && ref.includes("naver") && token) {
+            console.log("만들오토 시작")
+        } else {
+            alert("만들오토 블로그를 통해 접속해 주세요.")
+            window.location.replace("https://blog.naver.com/mandloh/224160574577")
+        }
+    }
 
 </script>
 

@@ -390,7 +390,6 @@
     const check_libraries = () => {
         if (tf_ready && tm_ready && jszip_ready && cv_ready) {
             sel_capture.disabled = false
-            main_loop()
         }
     }
 
@@ -552,7 +551,7 @@
             sel_area.disabled = false
             inp_roi.value = "0,0," + img.width + "," + img.height
             video_type = "img"
-            //main_loop()
+            main_loop()
         }
         img.onerror = (e) => {
             console.error('Failed to load stream:', e)
@@ -575,7 +574,7 @@
             video.onloadedmetadata = () => {
                 inp_roi.value = "0,0," + window.screen.width + "," + window.screen.height
                 video_type = "video"
-                //main_loop()
+                main_loop()
             }
             sel_capture.disabled = true
             sel_area.disabled = false
@@ -592,7 +591,7 @@
             video.onloadedmetadata = () => {
                 inp_roi.value = "0,0," + video.videoWidth + "," + video.videoHeight
                 video_type = "video"
-                //main_loop()
+                main_loop()
             }
             sel_capture.disabled = true
             sel_area.disabled = false

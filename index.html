@@ -382,9 +382,11 @@
     }
 
     const cv_loaded = () => {
-        console.log("Opencv is loaded")
-        cv_ready = true
-        check_libraries()
+        cv.onRuntimeInitialized = () => {
+            console.log("Opencv is loaded")
+            cv_ready = true
+            check_libraries()
+        }
     }
 
     const check_libraries = () => {

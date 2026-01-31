@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>만들오토 v1.0 r2</title>
+    <title>만들오토 v1.0 r3</title>
     <style>
         body {
             user-select: none;
@@ -499,11 +499,11 @@
                 ctxTemp.drawImage(canvas, 0, 0)
                 ctxTemp.strokeStyle = "limegreen"
                 ctxTemp.lineWidth = 10
-                ctxTemp.strokeRect(roc.maxLoc.x, roc.maxLoc.y, imgs[key].img_cv.cols, imgs[key].img_cv.rows)
+                ctxTemp.strokeRect(roc.maxLoc.x + x, roc.maxLoc.y + y, imgs[key].img_cv.cols, imgs[key].img_cv.rows)
 
                 const winSize = 300
-                const boxCx = Math.round(roc.maxLoc.x + imgs[key].img_cv.cols / 2)
-                const boxCy = Math.round(roc.maxLoc.y + imgs[key].img_cv.rows / 2)
+                const boxCx = Math.round(roc.maxLoc.x + x + imgs[key].img_cv.cols / 2)
+                const boxCy = Math.round(roc.maxLoc.y + y + imgs[key].img_cv.rows / 2)
 
                 const imgW = cnvTemp.width
                 const imgH = cnvTemp.height
@@ -1199,7 +1199,7 @@
         window.location.replace("https://blog.naver.com/mandloh/224160574577")
     }
 
-
+/*
     window.onload = () => {
         const ref = document.referrer
         const token = location.search.includes("mandloh")
@@ -1210,7 +1210,7 @@
             go_to_blog()
         }
     }
-
+*/
 </script>
 
 </html>

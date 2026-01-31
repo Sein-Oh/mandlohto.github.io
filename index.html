@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>만들오토 v1.0 r1</title>
+    <title>만들오토 v1.0 r2</title>
     <style>
         body {
             user-select: none;
@@ -167,17 +167,25 @@
     <fieldset class="container" style="width: 420px; height: 320px;">
         <legend>캡쳐</legend>
         <div style="display:flex; gap:6px;">
-            <select id="sel_capture" disabled="true" style="width:50%">
+            <button id="btn_capture" onclick="get_user_screen()" style="width:33%" disabled="true">캡쳐 시작</button>
+            <!-- <select id="sel_capture" disabled="true" style="width:50%">
                 <option value="none">--캡쳐방법 선택--</option>
                 <option value="desktop">데스크탑</option>
                 <option value="webcam_user">웹캠(전면)</option>
                 <option value="webcam_env">웹캠(후면)</option>
                 <option value="streaming">스트리밍URL</option>
-            </select>
-            <select id="sel_area" style="width:50%">
+            </select> -->
+            <select id="sel_area" style="width:33%">
                 <option value="full">전체화면</option>
                 <option value="custom">캡쳐영역 지정</option>
             </select>
+            <select id="sel_fps" style="width:33%">
+               <option value="30">30 FPS</option>
+               <option value="10" selected>10 FPS</option>
+               <option value="5">5 FPS</option>
+               <option value="2">2 FPS</option>
+               <option value="1">1 FPS</option>
+           </select>
         </div>
         <div id="div_roi" style="display:none;">
             <span style="margin-left:50px;">캡쳐영역</span>
@@ -195,23 +203,19 @@
     <fieldset class="container" style="width:420px;">
         <legend>설정</legend>
         <div style="display:flex; gap:6px;">
-            <select id="sel_input" style="width:50%">
+            <select id="sel_input" style="width:33%">
                 <option value="none">--입력방법 선택--</option>
                 <option value="arduino">아두이노</option>
                 <option value="server">서버</option>
             </select>
-            <div style="display:flex; gap:6px; width:50%">
-                <span style="margin-left:20px">화면 해상도</span>
-                <input id="screen_width" type="text" style="width:15%" value="1920">
-                <span>x</span>
-                <input id="screen_height" type="text" style="width:15%" value="1080">
-            </div>
-        </div>
-        
-        <div style="display:flex; gap:6px;">
-            <button style="width:33%;" onclick="change_delay()">FPS 설정</button>
             <button style="width:33%;" onclick="go_to_tm()">학습사이트</button>
-            <button style="width:33%;">도움말</button>
+            <button style="width:33%;" onclick="go_to_blog()">사용법</button>
+        </div>
+        <div id="div_res" style="display:none; gap:6px;">
+                <span style="margin-left:20px; width:33%">화면 해상도</span>
+                <input id="screen_width" type="text" style="width:33%" value="1920">
+                <span>x</span>
+                <input id="screen_height" type="text" style="width:33%" value="1080">
         </div>
     </fieldset>
     <fieldset id="slot_container" class="container" style="width:420px;">
@@ -268,17 +272,24 @@
     const img = new Image()
     img.crossOrigin = 'anonymous'
 
-    const sel_capture = document.getElementById("sel_capture")
-    sel_capture.addEventListener("change", (event) => {
+    // const sel_capture = document.getElementById("sel_capture")
+    // sel_capture.addEventListener("change", (event) => {
+    //     const value = event.target.value
+    //     console.log(`캡쳐방법 선택: ${value}`)
+    //     if (value === "desktop") get_user_screen()
+    //     else if (value === "webcam_user") get_user_camera("user")
+    //     else if (value === "webcam_env") get_user_camera("environment")
+    //     else if (value === "streaming") {
+    //         const url = prompt("스티리밍 URL을 입력하세요.")
+    //         get_user_stream(url)
+    //     }
+    // })
+
+    const sel_fps = document.getElementById("sel_fps")
+    sel_fps.addEventListener("change", (event) => {
         const value = event.target.value
-        console.log(`캡쳐방법 선택: ${value}`)
-        if (value === "desktop") get_user_screen()
-        else if (value === "webcam_user") get_user_camera("user")
-        else if (value === "webcam_env") get_user_camera("environment")
-        else if (value === "streaming") {
-            const url = prompt("스티리밍 URL을 입력하세요.")
-            get_user_stream(url)
-        }
+        delay = parseInt(1000 / value)
+        console.log(`FPS 선택: ${value}, Delay:${delay}`)
     })
 
 
@@ -402,7 +413,8 @@
 
     const check_libraries = () => {
         if (tf_ready && tm_ready && jszip_ready && cv_ready) {
-            sel_capture.disabled = false
+            // sel_capture.disabled = false
+            document.getElementById("btn_capture").disabled = false
         }
     }
 
@@ -560,7 +572,7 @@
         let stop = false
 
         img.onload = () => {
-            sel_capture.disabled = true
+            // sel_capture.disabled = true
             sel_area.disabled = false
             inp_roi.value = "0,0," + img.width + "," + img.height
             video_type = "img"
@@ -589,7 +601,8 @@
                 video_type = "video"
                 main_loop()
             }
-            sel_capture.disabled = true
+            // sel_capture.disabled = true
+            document.getElementById("btn_capture").disabled = true
             sel_area.disabled = false
         } catch (err) {
             console.error("Error: " + err)
@@ -606,7 +619,7 @@
                 video_type = "video"
                 main_loop()
             }
-            sel_capture.disabled = true
+            // sel_capture.disabled = true
             sel_area.disabled = false
         } catch (err) {
             console.error("Error: " + err)
@@ -628,6 +641,7 @@
             console.log("✅ Serial connected")
             sel_input.disabled = true
             input_type = "serial"
+            document.getElementById("div_res").style.display='flex'
         } catch (err) {
             console.error("❌ Serial connect error:", err)
             alert("시리얼 연결 실패.")
@@ -648,11 +662,11 @@
     }
 
     function send_command(cmd, type, id) {
-        const command = convert_command(cmd, type, id)
         if (input_type === "serial") {
+            const command = convert_command(cmd, type, id)
             send_serial(command)
         } else if (input_type == "server") {
-            send_url(command)
+            send_url(cmd)
         } else {
             console.log("입력방법이 설정되지 않았습니다.")
         }
@@ -1181,6 +1195,10 @@
         return { container, rows: row_map }
     }
 
+    const go_to_blog = () => {
+        window.location.replace("https://blog.naver.com/mandloh/224160574577")
+    }
+
 
     window.onload = () => {
         const ref = document.referrer
@@ -1189,7 +1207,7 @@
             console.log("만들오토 시작")
         } else {
             alert("만들오토 블로그를 통해 접속해 주세요.")
-            window.location.replace("https://blog.naver.com/mandloh/224160574577")
+            go_to_blog()
         }
     }
 

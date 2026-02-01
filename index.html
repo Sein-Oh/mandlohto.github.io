@@ -3,10 +3,10 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>만들오토 v1.0 r3</title>
+    <title>만들오토 v1.0 r5</title>
     <style>
         body {
-            user-select: none;
+            /* user-select: none; */
             font-size: 13px;
             font-family: "Segoe UI", Roboto, Arial, sans-serif;
             background: #f5f6f8;
@@ -180,12 +180,12 @@
                 <option value="custom">캡쳐영역 지정</option>
             </select>
             <select id="sel_fps" style="width:33%">
-               <option value="30">30 FPS</option>
-               <option value="10" selected>10 FPS</option>
-               <option value="5">5 FPS</option>
-               <option value="2">2 FPS</option>
-               <option value="1">1 FPS</option>
-           </select>
+                <option value="30">30 FPS</option>
+                <option value="10" selected>10 FPS</option>
+                <option value="5">5 FPS</option>
+                <option value="2">2 FPS</option>
+                <option value="1">1 FPS</option>
+            </select>
         </div>
         <div id="div_roi" style="display:none;">
             <span style="margin-left:50px;">캡쳐영역</span>
@@ -212,18 +212,22 @@
             <button style="width:33%;" onclick="go_to_blog()">사용법</button>
         </div>
         <div id="div_res" style="display:none; gap:6px;">
-                <span style="margin-left:20px; width:33%">화면 해상도</span>
-                <input id="screen_width" type="text" style="width:33%" value="1920">
-                <span>x</span>
-                <input id="screen_height" type="text" style="width:33%" value="1080">
+            <span style="margin-left:20px; width:33%">화면 해상도</span>
+            <input id="screen_width" type="text" style="width:33%" value="1920">
+            <span>x</span>
+            <input id="screen_height" type="text" style="width:33%" value="1080">
         </div>
     </fieldset>
-    <fieldset id="slot_container" class="container" style="width:420px;">
+    <!-- <fieldset id="slot_container" class="container" style="width:420px;"> -->
+    <fieldset class="container" style="width:420px;">
         <legend>슬롯</legend>
         <div style="display:flex; gap:6px;">
             <button style="width:33%;" onclick="add_slot_ai()">AI모델</button>
             <button style="width:33%;" onclick="add_slot_img()">이미지 찾기</button>
             <button style="width:33%;" onclick="add_slot_timer()">타이머</button>
+            <button style="width:33%;" onclick="add_slot_script()">스크립트</button>
+        </div>
+        <div id="slot_container" class="container">
         </div>
     </fieldset>
 
@@ -250,6 +254,7 @@
     const models = {}
     const imgs = {}
     const timers = {}
+    const scripts = {}
     let timerNum = 1
 
     let tf_ready = false
@@ -455,6 +460,7 @@
                     const threshold = parseFloat(row.threshold.value)
                     const cooltime = parseFloat(row.cooltime.value)
                     const cooling = models[model_id].cooling[p.className]
+                    models[model_id][p.className]["bool"] = p.probability >= threshold
                     if (checked && p.probability >= threshold && !cooling) {
                         send_command(command, "model", model_id)
                         models[model_id].cooling[p.className] = true
@@ -531,6 +537,13 @@
                 imgs[key].panel.rows.pos.textContent = `${boxCx},${boxCy}`
                 imgs[key].panel.rows.prob.textContent = roc.maxVal.toFixed(2)
                 imgs[key].panel.img.src = cnvCrop.toDataURL()
+                if (roc.maxVal >= threshold) {
+                    imgs[key]["bool"] = true
+                    imgs[key].panel.rows.prob.parentElement.style.backgroundColor = "#ffeaa7"
+                } else {
+                    imgs[key]["bool"] = false
+                    imgs[key].panel.rows.prob.parentElement.style.backgroundColor = ""
+                }
 
                 if (checked && roc.maxVal >= threshold && !cooling) {
                     send_command(command, "img", key)
@@ -556,6 +569,24 @@
                     timers[key].cooling = true
                     setTimeout(() => {
                         timers[key].cooling = false
+                    }, cooltime * 1000)
+                }
+            }
+        }
+
+        if (Object.keys(scripts).length > 0) {
+            for (const key in scripts) {
+                const panel = scripts[key].panel
+                const checked = panel.rows.run.checked
+                const command = panel.rows.command.value
+                const cooltime = parseFloat(panel.rows.cooltime.value)
+                const cooling = scripts[key].cooling
+                const result = runRule(scripts[key].text, models, imgs)
+                if (result && checked && !cooling) {
+                    send_command(command, "script", null)
+                    scripts[key].cooling = true
+                    setTimeout(() => {
+                        scripts[key].cooling = false
                     }, cooltime * 1000)
                 }
             }
@@ -641,7 +672,7 @@
             console.log("✅ Serial connected")
             sel_input.disabled = true
             input_type = "serial"
-            document.getElementById("div_res").style.display='flex'
+            document.getElementById("div_res").style.display = 'flex'
         } catch (err) {
             console.error("❌ Serial connect error:", err)
             alert("시리얼 연결 실패.")
@@ -780,6 +811,26 @@
         return points.join(` -${delay} `)
     }
 
+    const add_slot_script = () => {
+        const fileInput = document.createElement("input")
+        fileInput.type = "file"
+        fileInput.multiple = true
+        fileInput.style.display = "none"
+        fileInput.addEventListener("change", async (event) => {
+            const files = event.target.files
+            for (file of files) {
+                const prefix = file.name.split(".")[1]
+                if (prefix === "txt") {
+                    add_script(file)
+                } else {
+                    alert("txt 파일만 추가할 수 있습니다.")
+                    return
+                }
+            }
+        })
+        fileInput.click()
+    }
+
     const add_slot_ai = () => {
         const fileInput = document.createElement("input")
         fileInput.type = "file"
@@ -880,11 +931,12 @@
         models[fileName]["model"] = new_model
         models[fileName]["ROI"] = roi_ary
         models[fileName]["classNames"] = classNames
-        const panel = create_model_panel(fileName, classNames)
-        models[fileName]["panel"] = panel
+        models[fileName]["panel"] = create_model_panel(fileName, classNames)
         models[fileName]["cooling"] = {}
         classNames.forEach(cls => {
+            models[fileName][cls] = {}
             models[fileName]["cooling"][cls] = false
+            models[fileName][cls]["bool"] = false
         })
     }
 
@@ -917,10 +969,18 @@
 
         classNames.forEach(label => {
             const tr = document.createElement("tr")
-
             const td_label = document.createElement("td")
             td_label.textContent = label
             td_label.width = "50px"
+            td_label.style.cursor = "pointer"
+            td_label.addEventListener("click", async () => {
+                const text = `${fileName}:${td_label.textContent}`
+                try {
+                    await navigator.clipboard.writeText(text)
+                } catch (err) {
+                    console.error("복사 실패:", err)
+                }
+            })
 
             const td_prob = document.createElement("td")
             td_prob.textContent = "0.00"
@@ -966,7 +1026,8 @@
         table.appendChild(tbody)
         container.appendChild(img)
         container.appendChild(table)
-        document.getElementById("slot_container").appendChild(container)
+        // document.getElementById("slot_container").appendChild(container)
+        document.getElementById("slot_container").prepend(container)
         return { container, img, rows: row_map }
     }
 
@@ -1030,6 +1091,7 @@
         imgs[fileName]["panel"] = panel
         imgs[fileName]["cooling"] = false
         imgs[fileName]["pos"] = [0, 0]
+        imgs[fileName]["bool"] = false
 
 
         const img = new Image()
@@ -1058,6 +1120,15 @@
         container.dataset.modelId = fileName
         const legend = document.createElement("legend")
         legend.textContent = fileName
+        legend.style.cursor = "pointer"
+        legend.addEventListener("click", async () => {
+            const text = legend.textContent
+            try {
+                await navigator.clipboard.writeText(text)
+            } catch (err) {
+                console.error("복사 실패:", err)
+            }
+        })
         container.appendChild(legend)
         const img = document.createElement("img")
         const table = document.createElement("table")
@@ -1118,7 +1189,8 @@
         table.appendChild(tbody)
         container.appendChild(img)
         container.appendChild(table)
-        document.getElementById("slot_container").appendChild(container)
+        // document.getElementById("slot_container").appendChild(container)
+        document.getElementById("slot_container").prepend(container)
 
         const row_map = {
             pos: td_pos,
@@ -1134,9 +1206,8 @@
     const add_slot_timer = () => {
         const name = `timer${timerNum}`
         timerNum += 1
-        const panel = add_timer_panel(name)
         timers[name] = {}
-        timers[name]["panel"] = panel
+        timers[name]["panel"] = add_timer_panel(name)
         timers[name]["cooling"] = false
     }
 
@@ -1185,7 +1256,9 @@
         tbody.appendChild(tr)
         table.appendChild(tbody)
         container.appendChild(table)
-        document.getElementById("slot_container").appendChild(container)
+        // document.getElementById("slot_container").appendChild(container)
+        document.getElementById("slot_container").prepend(container)
+
 
         const row_map = {
             cooltime: ct_input,
@@ -1199,18 +1272,192 @@
         window.location.replace("https://blog.naver.com/mandloh/224160574577")
     }
 
-/*
-    window.onload = () => {
-        const ref = document.referrer
-        const token = location.search.includes("mandloh")
-        if (ref.includes("blog") && ref.includes("naver") && token) {
-            console.log("만들오토 시작")
-        } else {
-            alert("만들오토 블로그를 통해 접속해 주세요.")
-            go_to_blog()
+    function checkRuleTargets(text, models, imgs) {
+        const missing = {
+            imgs: [],
+            models: []
+        }
+
+        // model:class[T]
+        const modelRegex = /([^\s:\[\]]+):([^\s\[\]]+)\[T\]/g
+        let m
+
+        while ((m = modelRegex.exec(text)) !== null) {
+            const name = m[1]
+            const cls = m[2]
+
+            if (
+                !models[name] ||
+                !models[name][cls]
+            ) {
+                missing.models.push(`${name}:${cls}`)
+            }
+        }
+
+        // img[T]
+        const imgRegex = /([^\s\[\]&|]+)\[T\]/g
+        let i
+
+        while ((i = imgRegex.exec(text)) !== null) {
+            const name = i[1]
+
+            // 모델 패턴 제외
+            if (name.includes(":")) continue
+
+            if (!imgs[name]) {
+                missing.imgs.push(name)
+            }
+        }
+
+        return missing
+    }
+
+
+    const add_script = file => {
+        if (!file) return
+        const fileName = file.name.split(".")[0]
+        const reader = new FileReader()
+        reader.onload = e => {
+            const text = e.target.result
+            // 🔍 존재 여부 검사
+            const missing = checkRuleTargets(text, models, imgs)
+            if (
+                missing.imgs.length ||
+                missing.models.length
+            ) {
+                alert("이미지 또는 모델을 찾을 수 없습니다.")
+                return
+            }
+            // ✅ 스크립트 등록
+            scripts[fileName] = {
+                text,
+                panel: add_script_panel(fileName),
+                cooling: false,
+                missing
+            }
+            console.log("등록된 스크립트:", scripts[fileName])
+        }
+        reader.readAsText(file, "utf-8")
+    }
+
+
+
+    function parseRuleText(text) {
+        let expr = text.trim()
+        expr = expr.replace(/\band\b/gi, "&&")
+        expr = expr.replace(/\bor\b/gi, "||")
+        // model:class[T]
+        expr = expr.replace(
+            /([^\s:\[\]]+):([^\s\[\]]+)\[T\]/g,
+            'safeModel("$1","$2",models)'
+        )
+        // img[T]
+        expr = expr.replace(
+            /([^\s\[\]&|]+)\[T\]/g,
+            'safeImg("$1",imgs)'
+        )
+        return expr
+    }
+
+    function runRule(text, models, imgs) {
+        const expr = parseRuleText(text)
+        // console.log("변환:", expr)
+        try {
+            const fn = new Function(
+                "models",
+                "imgs",
+                "safeImg",
+                "safeModel",
+                `return (${expr})`
+            )
+            return fn(models, imgs, safeImg, safeModel)
+        } catch (e) {
+            console.error("룰 실행 오류:", e)
+            return false
         }
     }
-*/
+
+    function safeImg(name, imgs) {
+        return !!(imgs[name] && imgs[name].bool === true)
+    }
+
+    function safeModel(name, cls, models) {
+        return !!(
+            models[name] &&
+            models[name][cls] &&
+            models[name][cls].bool === true
+        )
+    }
+
+    function add_script_panel(label) {
+        const container = document.createElement("fieldset")
+        container.className = "model-container"
+        container.dataset.modelId = label
+        const legend = document.createElement("legend")
+        legend.textContent = label
+        container.appendChild(legend)
+        const table = document.createElement("table")
+        table.className = "model-table"
+        const thead = document.createElement("thead")
+        thead.innerHTML = `
+            <tr>
+                <th>쿨타임</th>
+                <th>입력</th>
+                <th>실행</th>
+            </tr>
+            `
+        table.appendChild(thead)
+
+        const tbody = document.createElement("tbody")
+        const tr = document.createElement("tr")
+
+        const td_ct = document.createElement("td")
+        td_ct.width = "60px"
+        const ct_input = document.createElement("input")
+        ct_input.type = "text"
+        ct_input.value = "3.0"
+        td_ct.appendChild(ct_input)
+
+        const td_cmd = document.createElement("td")
+        const cmd_input = document.createElement("input")
+        cmd_input.type = "text"
+        cmd_input.className = "cmd-input"
+        td_cmd.appendChild(cmd_input)
+
+        const td_run = document.createElement("td")
+        td_run.width = "20px"
+        const run_check = document.createElement("input")
+        run_check.type = "checkbox"
+        td_run.appendChild(run_check)
+
+        tr.append(td_ct, td_cmd, td_run)
+        tbody.appendChild(tr)
+        table.appendChild(tbody)
+        container.appendChild(table)
+        // document.getElementById("slot_container").appendChild(container)
+        document.getElementById("slot_container").prepend(container)
+
+
+        const row_map = {
+            cooltime: ct_input,
+            command: cmd_input,
+            run: run_check
+        }
+        return { container, rows: row_map }
+    }
+
+    
+        window.onload = () => {
+            const ref = document.referrer
+            const token = location.search.includes("mandloh")
+            if (ref.includes("blog") && ref.includes("naver") && token) {
+                console.log("만들오토 시작")
+            } else {
+                alert("만들오토 블로그를 통해 접속해 주세요.")
+                go_to_blog()
+            }
+        }
+    
 </script>
 
 </html>

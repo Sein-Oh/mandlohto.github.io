@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>만들오토 v1.0 r5</title>
+    <title>만들오토 v1.0 r6</title>
     <style>
         body {
             /* user-select: none; */
@@ -241,6 +241,7 @@
     let show_delay = false
     const screen_width = document.getElementById("screen_width")
     const screen_height = document.getElementById("screen_height")
+    const tm_scale = 0.5
 
     let cvFrame = null
     let cvGray = null
@@ -447,8 +448,16 @@
         }
 
         if (Object.keys(models).length > 0) {
+            const tmpCanvas = document.createElement("canvas")
+            tmpCanvas.width = 224
+            tmpCanvas.height = 224
+            const tctx = tmpCanvas.getContext("2d")
             for (const model_id in models) {
                 const model = models[model_id].model
+                const [x, y, w, h] = models[model_id]["ROI"]
+                tctx.drawImage(video, x, y, w, h, 0, 0, 224, 224)
+                models[model_id].panel.img.src = tmpCanvas.toDataURL()
+
                 const prediction = await model.predict(models[model_id].panel.img)
                 update_model_panel(model_id, prediction)
 
@@ -1037,14 +1046,6 @@
             alert("패널이 생성되지 않았습니다.")
             return
         }
-        const [x, y, w, h] = models[fileName]["ROI"]
-        const tmpCanvas = document.createElement("canvas")
-        tmpCanvas.width = w
-        tmpCanvas.height = h
-        const tctx = tmpCanvas.getContext("2d", { willReadFrequently: true })
-
-        tctx.drawImage(video, x, y, w, h, 0, 0, w, h)
-        panel.img.src = tmpCanvas.toDataURL()
 
         let maxClass = null
         let maxProb = -1

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset='UTF-8'>
-    <title>만들오토 v1.1</title>
+    <title>만들오토 v1.2 (2026.04.19)</title>
     <style>
         body {
             font-size: 14px;
@@ -22,7 +22,7 @@
         }
 
         fieldset.mainFrame {
-            width: 450px;
+            width: 420px;
         }
 
         fieldset legend {
@@ -145,8 +145,8 @@
                 <option value='none'>--- 캡쳐 선택 ---</option>
                 <option value='desktop'>데스크탑</option>
                 <option value='streaming'>스트리밍URL</option>
-                <option value='user'>웹캠(전면)</option>
-                <option value='environment'>웹캠(후면)</option>
+                <!-- <option value='user'>웹캠(전면)</option>
+                <option value='environment'>웹캠(후면)</option> -->
             </select>
             <select id='selectFPS' style='width:25%'>
                 <option value='30'>30 FPS</option>
@@ -176,6 +176,19 @@
         </div>
 
     </fieldset>
+
+    <fieldset class='mainFrame'>
+        <legend>설정</legend>
+        <div class='row'>
+            <select id='selectInput' style='width:33%'>
+                <option value='none'>--입력방법 선택--</option>
+                <option value='arduino'>아두이노</option>
+                <option value='server'>서버</option>
+            </select>
+            <button style='width:33%'>TEST</button>
+            <button style='width:33%'>TEST</button>
+        </div>
+    </fieldset>
 </body>
 <script>
     const canvas = document.getElementById('canvas')
@@ -198,6 +211,12 @@
     const inputROI = document.getElementById('inputROI')
     let recordInterval = null
     let onRecord = false
+
+    let port = null
+    let writer = null
+    const encoder = new TextEncoder()
+    let inputURL = ''
+    let inputType = null
 
 
     //FPS 셀렉트
@@ -263,6 +282,71 @@
             document.getElementById('containerROI').style.display = 'none'
             document.getElementById('inputROI').disabled = true
             showROI = false
+        }
+    })
+
+    const connectSerial = async () => {
+        try {
+            if (!('serial' in navigator)) {
+                alert('Web Serial API를 지원하지 않는 브라우저입니다.')
+                return
+            }
+            port = await navigator.serial.requestPort()
+            await port.open({ baudRate: 9600 })
+            writer = port.writable.getWriter()
+            document.getElementById('selectInput').disabled = true
+            inputType = 'serial'
+            console.log('✅ Serial connected')
+        } catch (err) {
+            console.error('❌ Serial connect error:', err)
+            document.getElementById('selectInput').value = 'none'
+            alert('시리얼 연결 실패.')
+            inputType = null
+        }
+    }
+
+    const sendSerial = async (data) => {
+        if (!writer) return
+        try {
+            const buffer = encoder.encode(data)
+            await writer.write(buffer)
+            console.log('➡️ Sent:', data)
+        } catch (err) {
+            console.error('❌ Send error:', err)
+        }
+    }
+
+    const sendURL = async (command) => {
+        const url = inputURL.endsWith("/") ? inputURL + command : inputURL + "/" + command
+        try {
+            await fetch(url)
+            console.log(`Sent command: ${command}`)
+        } catch (err) {
+            console.error(`Failed to send command: ${command}`)
+        }
+    }
+
+    const send = (command) => {
+        if (inputType === 'serial') {
+            sendSerial(command)
+        } else if (inputType === 'server') {
+            sendURL(command)
+        } else {
+            console.warn('No input method selected.')
+        }
+    }
+    //입력방법 셀렉트
+    document.getElementById('selectInput').addEventListener('change', event => {
+        const value = event.target.value
+        if (value === 'arduino') {
+            connectSerial()
+        } else if (value === 'server') {
+            inputURL = prompt('서버 주소를 입력하세요. 예)http://localhost:8000/input/', 'http://localhost:8000/input/')
+            inputType = 'server'
+            document.getElementById('selectInput').disabled = true
+        } else {
+            document.getElementById('inputOption').value = ''
+            inputType = null
         }
     })
 

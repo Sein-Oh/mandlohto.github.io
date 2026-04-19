@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang='ko'>
+
+<head>
+    <meta charset='UTF-8'>
+    <title>만들오토 v1.1</title>
+    <style>
+        body {
+            font-size: 14px;
+            font-family: 'Segoe UI', Roboto, Apple SD Gothic Neo, sans-serif;
+            background: #f7f8fa;
+            color: #222;
+        }
+
+        fieldset {
+            margin: 6px;
+            padding: 8px 10px 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fff;
+            box-sizing: border-box;
+        }
+
+        fieldset.mainFrame {
+            width: 450px;
+        }
+
+        fieldset legend {
+            font-weight: 600;
+            font-size: 13px;
+            padding: 0 6px;
+            color: #444;
+        }
+
+        select,
+        input {
+            height: 26px;
+            padding: 0 8px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 13px;
+            text-align: center;
+            background: #fff;
+            box-sizing: border-box;
+            transition: all 0.15s ease;
+        }
+
+        select:focus,
+        input:focus {
+            border-color: #4f80ff;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(79, 128, 255, 0.15);
+        }
+
+        select:disabled,
+        input[type='text']:disabled {
+            background: #f1f3f6;
+            color: #9aa0a6;
+            border: 1px dashed #c5cbd6;
+            cursor: not-allowed;
+        }
+
+        button {
+            height: 26px;
+            padding: 0 10px;
+            border: none;
+            border-radius: 6px;
+            background: #4f80ff;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        button:hover {
+            background: #3b6df0;
+        }
+
+        button:active {
+            transform: translateY(1px);
+            background: #335fd8;
+        }
+
+        button:disabled,
+        button[disabled] {
+            background: #c5cbe0;
+            /* 흐린 블루/그레이 */
+            color: #8a8fa3;
+            /* 텍스트도 흐리게 */
+            cursor: not-allowed;
+            transform: none;
+            /* 눌림 효과 제거 */
+            box-shadow: none;
+            opacity: 0.7;
+        }
+
+        /* disabled 상태에서는 hover/active 효과 제거 */
+        button:disabled:hover,
+        button:disabled:active {
+            background: #c5cbe0;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .canvasWrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 6px;
+            border-radius: 8px;
+            background: #f1f3f6;
+            max-height: 220px;
+            height: 220px;
+        }
+
+        .canvasWrapper canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            background: #000;
+            border-radius: 6px;
+        }
+
+        .container {
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-sizing: border-box;
+        }
+    </style>
+    <script src='capture.js'></script>
+</head>
+
+<body>
+    <fieldset class='mainFrame'>
+        <legend>캡쳐설정</legend>
+        <div class='row'>
+            <select id='selectCapture' style='width:45%'>
+                <option value='none'>--- 캡쳐 선택 ---</option>
+                <option value='desktop'>데스크탑</option>
+                <option value='streaming'>스트리밍URL</option>
+                <option value='user'>웹캠(전면)</option>
+                <option value='environment'>웹캠(후면)</option>
+            </select>
+            <select id='selectFPS' style='width:25%'>
+                <option value='30'>30 FPS</option>
+                <option value='10'>10 FPS</option>
+                <option value='5' selected>5 FPS</option>
+                <option value='2'>2 FPS</option>
+                <option value='1'>1 FPS</option>
+            </select>
+            <select id='selectROI' style='width:30%'>
+                <option value='false'>캡쳐도구: 닫기</option>
+                <option value='true'>캡쳐도구: 열기</option>
+            </select>
+        </div>
+        <div class='canvasWrapper'>
+            <canvas id='canvas'></canvas>
+        </div>
+        <div id='containerROI' class='container' style='display:none'>
+            <div class='row'>
+                <span>캡쳐영역</span>
+                <input id='inputROI' type='text' style='width:40%' placeholder='x, y, w, h' disabled='true'>
+                <button id='btnRecord' style='width:20%' id='btnRecord' onclick='startRecording()'>캡쳐 녹화</button>
+                <button id='btnCapture' style='width:20%' onclick='saveCapture()'>스크린샷</button>
+            </div>
+            <div id='canvasROIWrapper' class='canvasWrapper'>
+                <canvas id='canvasROI'></canvas>
+            </div>
+        </div>
+
+    </fieldset>
+</body>
+<script>
+    const canvas = document.getElementById('canvas')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    canvas.width = 400
+    canvas.height = 225
+
+    let fps = 5
+    const cap = new Capture(canvas, { fps: fps })
+    let captureSize = { width: 0, height: 0 }
+    let showROI = false
+
+
+    const canvasROI = document.getElementById('canvasROI')
+    const ctxROI = canvasROI.getContext('2d', { willReadFrequently: true })
+    canvasROI.width = 400
+    canvasROI.height = 225
+
+
+    const inputROI = document.getElementById('inputROI')
+    let recordInterval = null
+    let onRecord = false
+
+
+    //FPS 셀렉트
+    document.getElementById('selectFPS').addEventListener('change', event => {
+        fps = parseInt(event.target.value)
+        cap.setFPS(fps)
+        console.log(`FPS: ${fps} 적용.`)
+    })
+
+
+    //캡쳐 셀렉트
+    document.getElementById('selectCapture').addEventListener('change', event => {
+        const value = event.target.value
+        if (value === 'desktop') {
+            cap.startDesktop().then(() => {
+                captureSize = cap.getSourceSize()
+                canvas.width = captureSize.width, canvas.height = captureSize.height
+                console.log(`데스크탑 캡쳐 시작. 캡쳐영역: ${captureSize.width}x${captureSize.height}`)
+                inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
+                loop()
+            })
+        }
+        else if (value === 'streaming') {
+            const url = prompt('스트리밍 URL을 입력하세요 (예: http://localhost:8000)', 'http://localhost:8000')
+            cap.startStream(url).then(() => {
+                captureSize = cap.getSourceSize()
+                canvas.width = captureSize.width, canvas.height = captureSize.height
+                console.log(`스트리밍 캡쳐 시작. 캡쳐영역: ${captureSize.width}x${captureSize.height}`)
+                inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
+                loop()
+            })
+        }
+        else if (value === 'user') {
+            cap.startWebcam('user').then(() => {
+                captureSize = cap.getSourceSize()
+                canvas.width = captureSize.width, canvas.height = captureSize.height
+                console.log(`웹캠(전면) 캡쳐 시작. 캡쳐영역: ${captureSize.width}x${captureSize.height}`)
+                inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
+                loop()
+            })
+        }
+        else if (value === 'environment') {
+            cap.startWebcam('environment').then(() => {
+                captureSize = cap.getSourceSize()
+                canvas.width = captureSize.width, canvas.height = captureSize.height
+                console.log(`웹캠(후면) 캡쳐 시작. 캡쳐영역: ${captureSize.width}x${captureSize.height}`)
+                inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
+                loop()
+            })
+        }
+        cap.setFPS(fps)
+    })
+
+    //캡쳐영역 도구 셀렉트
+    document.getElementById('selectROI').addEventListener('change', event => {
+        const value = event.target.value
+        if (value === 'true') {
+            document.getElementById('containerROI').style.display = 'flex'
+            document.getElementById('inputROI').disabled = false
+            showROI = true
+            inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
+        } else {
+            document.getElementById('containerROI').style.display = 'none'
+            document.getElementById('inputROI').disabled = true
+            showROI = false
+        }
+    })
+
+    const getTimestamp = () => {
+        const now = new Date()
+        const yy = now.getFullYear().toString().slice(-2)
+        const mm = String(now.getMonth() + 1).padStart(2, '0')
+        const dd = String(now.getDate()).padStart(2, '0')
+        const hh = String(now.getHours()).padStart(2, '0')
+        const min = String(now.getMinutes()).padStart(2, '0')
+        const ss = String(now.getSeconds()).padStart(2, '0')
+        const timestamp = `${yy}${mm}${dd}${hh}${min}${ss}`
+        return timestamp
+    }
+
+    //Capture
+    const saveCapture = () => {
+        const data_url = canvasROI.toDataURL("image/png")
+        const link = document.createElement("a")
+        const timestamp = getTimestamp()
+        const ROI = inputROI.value.split(',').map(v => Number(v.trim())).toString()
+        link.href = data_url
+        link.download = `${timestamp}_${ROI}.png`
+        link.click()
+        console.log(`캡쳐 저장: ${link.download}`)
+    }
+
+    //Recording
+    const startRecording = () => {
+        onRecord = !onRecord
+        if (onRecord) {
+            recordInterval = setInterval(saveCapture, 1000)
+            console.log('녹화 시작')
+            document.getElementById('btnRecord').textContent = "녹화 중지"
+            document.getElementById('btnRecord').style.background = '#d9534f'
+        } else {
+            clearInterval(recordInterval)
+            recordInterval = null
+            console.log('녹화 종료')
+            document.getElementById('btnRecord').textContent = "캡쳐 녹화"
+            document.getElementById('btnRecord').style.background = '#4f80ff'
+        }
+    }
+
+    //Main loop
+    const loop = () => {
+        if (showROI === true) {
+            if (inputROI.value.split(',').length === 4) {
+                // ROI : x1, y1, x2, y2
+                const ROI = inputROI.value.split(',').map(v => Number(v.trim()))
+                if (ROI[2] > 0 && ROI[3] > 0) {
+                    canvasROI.width = ROI[2] - ROI[0]
+                    canvasROI.height = ROI[3] - ROI[1]
+                    ctxROI.drawImage(cap.getSourceElement(), ROI[0], ROI[1], ROI[2] - ROI[0], ROI[3] - ROI[1], 0, 0, ROI[2] - ROI[0], ROI[3] - ROI[1])
+                }
+            }
+        }
+        setTimeout(loop, 1000 / fps)
+    }
+
+</script>
+
+</html>

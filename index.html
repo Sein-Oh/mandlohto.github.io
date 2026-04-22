@@ -133,8 +133,49 @@
             gap: 8px;
             box-sizing: border-box;
         }
+
+        .slot {
+            border: 1px solid #aaa;
+            border-radius: 6px;
+            padding: 6px;
+            margin: 2px 0;
+            background: #f9f9f9;
+        }
+
+        /* 상단 라인 */
+        .slot-header {
+            display: flex;
+            /* justify-content: space-between; */
+            align-items: center;
+        }
+
+        /* 우측 토글 영역 */
+        .slot-right {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* 이미지 */
+        .slot-image {
+            width: 340px;
+            height: 180px;
+            object-fit: contain;
+            margin-top: 5px;
+        }
+
+        .slot-label {
+            width: 260px;
+            background: #e1e4eb;
+        }
+
+        #slotContainer {
+            max-height: 200px;
+            overflow-y: auto;
+        }
     </style>
     <script src='capture.js'></script>
+    <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
 </head>
 
 <body>
@@ -143,7 +184,7 @@
         <div class='row'>
             <select id='selectCapture' style='width:45%'>
                 <option value='none'>--- 캡쳐 선택 ---</option>
-                <option value='desktop'>데스크탑</option>
+                <option value='desktop'>데스크탑 캡쳐</option>
                 <option value='streaming'>스트리밍URL</option>
                 <!-- <option value='user'>웹캠(전면)</option>
                 <option value='environment'>웹캠(후면)</option> -->
@@ -174,27 +215,45 @@
                 <canvas id='canvasROI'></canvas>
             </div>
         </div>
-
     </fieldset>
 
     <fieldset class='mainFrame'>
-        <legend>설정</legend>
+        <legend>입력설정</legend>
         <div class='row'>
-            <select id='selectInput' style='width:33%'>
+            <select id='selectInput' style='width:40%'>
                 <option value='none'>--입력방법 선택--</option>
                 <option value='arduino'>아두이노</option>
                 <option value='server'>서버</option>
             </select>
-            <button style='width:33%'>TEST</button>
-            <button style='width:33%'>TEST</button>
+            <input type='text' id='inputTest' style='width:30%' placeholder='테스트 명령어'>
+            <button style='width:30%' onclick='executeTest()'>실행</button>
+        </div>
+    </fieldset>
+
+    <fieldset class='mainFrame'>
+        <legend>리소스</legend>
+        <div class='row'>
+            <button onclick='addResource()' style='width:33%'>업로드</button>
+            <button id='btn_addSlot' onclick='addSlot()' style='width:33%' disabled>슬롯 생성</button>
+            <button onclick='viewResourceList()' style='width:33%'>리소스 목록 확인</button>
+        </div>
+    </fieldset>
+
+    <fieldset class='mainFrame'>
+        <legend>슬롯</legend>
+        <div id='slotContainer' class='container'>
         </div>
     </fieldset>
 </body>
 <script>
+    const slots = {}
+
     const canvas = document.getElementById('canvas')
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     canvas.width = 400
     canvas.height = 225
+    const canvasCrop = document.createElement('canvas')
+    const ctxCrop = canvasCrop.getContext('2d', { willReadFrequently: true })
 
     let fps = 5
     const cap = new Capture(canvas, { fps: fps })
@@ -217,6 +276,26 @@
     const encoder = new TextEncoder()
     let inputURL = ''
     let inputType = null
+    let streamURL = ''
+
+    const img_obj = {}
+    const mat_obj = {}
+
+
+    window.onload = () => {
+        console.log('만들오토 v1.2 (2026.04.19)')
+        inputURL = localStorage.getItem('inputURL')
+        streamURL = localStorage.getItem('streamURL')
+        // console.log(inputURL, streamURL)
+    }
+
+
+    const cvLoaded = () => {
+        cv.onRuntimeInitialized = () => {
+            console.log("Opencv is loaded")
+            document.getElementById('btn_addSlot').disabled = false
+        }
+    }
 
 
     //FPS 셀렉트
@@ -236,17 +315,16 @@
                 canvas.width = captureSize.width, canvas.height = captureSize.height
                 console.log(`데스크탑 캡쳐 시작. 캡쳐영역: ${captureSize.width}x${captureSize.height}`)
                 inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
-                loop()
             })
         }
         else if (value === 'streaming') {
-            const url = prompt('스트리밍 URL을 입력하세요 (예: http://localhost:8000)', 'http://localhost:8000')
+            const url = prompt('스트리밍 URL을 입력하세요 (예: http://localhost:8000)', streamURL || 'http://localhost:8000')
             cap.startStream(url).then(() => {
                 captureSize = cap.getSourceSize()
                 canvas.width = captureSize.width, canvas.height = captureSize.height
                 console.log(`스트리밍 캡쳐 시작. 캡쳐영역: ${captureSize.width}x${captureSize.height}`)
                 inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
-                loop()
+                localStorage.setItem('streamURL', url)
             })
         }
         else if (value === 'user') {
@@ -255,7 +333,6 @@
                 canvas.width = captureSize.width, canvas.height = captureSize.height
                 console.log(`웹캠(전면) 캡쳐 시작. 캡쳐영역: ${captureSize.width}x${captureSize.height}`)
                 inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
-                loop()
             })
         }
         else if (value === 'environment') {
@@ -264,11 +341,11 @@
                 canvas.width = captureSize.width, canvas.height = captureSize.height
                 console.log(`웹캠(후면) 캡쳐 시작. 캡쳐영역: ${captureSize.width}x${captureSize.height}`)
                 inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
-                loop()
             })
         }
         cap.setFPS(fps)
     })
+
 
     //캡쳐영역 도구 셀렉트
     document.getElementById('selectROI').addEventListener('change', event => {
@@ -284,6 +361,24 @@
             showROI = false
         }
     })
+
+
+    //입력방법 셀렉트
+    document.getElementById('selectInput').addEventListener('change', event => {
+        const value = event.target.value
+        if (value === 'arduino') {
+            connectSerial()
+        } else if (value === 'server') {
+            inputURL = prompt('서버 주소를 입력하세요. 예)http://localhost:8000/input/', inputURL || 'http://localhost:8000/input/')
+            inputType = 'server'
+            document.getElementById('selectInput').disabled = true
+            localStorage.setItem('inputURL', inputURL)
+        } else {
+            document.getElementById('inputOption').value = ''
+            inputType = null
+        }
+    })
+
 
     const connectSerial = async () => {
         try {
@@ -305,6 +400,7 @@
         }
     }
 
+
     const sendSerial = async (data) => {
         if (!writer) return
         try {
@@ -316,6 +412,7 @@
         }
     }
 
+
     const sendURL = async (command) => {
         const url = inputURL.endsWith("/") ? inputURL + command : inputURL + "/" + command
         try {
@@ -326,6 +423,7 @@
         }
     }
 
+
     const send = (command) => {
         if (inputType === 'serial') {
             sendSerial(command)
@@ -335,20 +433,17 @@
             console.warn('No input method selected.')
         }
     }
-    //입력방법 셀렉트
-    document.getElementById('selectInput').addEventListener('change', event => {
-        const value = event.target.value
-        if (value === 'arduino') {
-            connectSerial()
-        } else if (value === 'server') {
-            inputURL = prompt('서버 주소를 입력하세요. 예)http://localhost:8000/input/', 'http://localhost:8000/input/')
-            inputType = 'server'
-            document.getElementById('selectInput').disabled = true
+
+
+    const executeTest = () => {
+        const command = document.getElementById('inputTest').value.trim()
+        if (command) {
+            send(command)
         } else {
-            document.getElementById('inputOption').value = ''
-            inputType = null
+            alert('테스트 명령어를 입력하세요.')
         }
-    })
+    }
+
 
     const getTimestamp = () => {
         const now = new Date()
@@ -362,6 +457,7 @@
         return timestamp
     }
 
+
     //Capture
     const saveCapture = () => {
         const data_url = canvasROI.toDataURL("image/png")
@@ -373,6 +469,7 @@
         link.click()
         console.log(`캡쳐 저장: ${link.download}`)
     }
+
 
     //Recording
     const startRecording = () => {
@@ -391,6 +488,329 @@
         }
     }
 
+
+    const validateSlotData = data => {
+        if (!data.type || !data.key || !data.cooltime) return false
+
+        // 🔹 timer 타입
+        if (data.type === 'timer') {
+            return (
+                typeof data.key === 'string' &&
+                !isNaN(data.cooltime)
+            )
+        }
+
+        // 🔹 img 타입
+        if (data.type === 'img') {
+            return (
+                data.img &&
+                !isNaN(data.cooltime) &&
+                !isNaN(data.x1) &&
+                !isNaN(data.y1) &&
+                !isNaN(data.x2) &&
+                !isNaN(data.y2) &&
+                !isNaN(data.threshold)
+            )
+        }
+
+        return false
+    }
+
+
+    const addResource = () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = '.txt,image/*'
+        input.multiple = true
+
+        input.onchange = e => {
+            const files = e.target.files
+            if (!files || files.length === 0) return
+            for (let file of files) {
+                const isText = file.name.endsWith('.txt')
+                if (isText) {
+                    const reader = new FileReader()
+                    reader.onload = event => {
+                        const text = event.target.result
+                        const lines = text.split('\n')
+                        const data = {}
+                        lines.forEach(line => {
+                            const [key, value] = line.split(':').map(v => v.trim())
+                            if (!key || !value) return
+                            if (key === 'img') {
+                                const imgs = value.split(' ').map(v => v.trim().toLowerCase())
+                                if (!data.img) data.img = []
+                                data.img.push(...imgs)
+                            } else {
+                                data[key] = value
+                            }
+                        })
+                        if (data.cooltime) data.cooltime = Number(data.cooltime)
+                        if (data.threshold) data.threshold = Number(data.threshold)
+                        if (data.x1) data.x1 = Number(data.x1)
+                        if (data.x2) data.x2 = Number(data.x2)
+                        if (data.y1) data.y1 = Number(data.y1)
+                        if (data.y2) data.y2 = Number(data.y2)
+
+                        data.cooling = false
+                        data.result = { value: 0, cx: 0, cy: 0, bool: false }
+                        const name = file.name.replace('.txt', '')
+                        if (!validateSlotData(data)) return
+                        slots[name] = data
+                        // cooling 추가
+                    }
+                    reader.readAsText(file)
+                } else {
+                    // 🔥 핵심: 바로 src로 사용 가능하게 변환
+                    const url = URL.createObjectURL(file)
+                    img_obj[file.name.split('.')[0]] = url
+                    console.log('이미지 추가:', file.name)
+
+                    // Mat 객체로도 저장 (추후 OpenCV 처리용)
+                    const img = new Image()
+                    img.src = url
+                    img.onload = () => {
+                        const src = cv.imread(img)
+                        const gray = new cv.Mat()
+                        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+                        const key = file.name.split('.')[0]
+                        if (mat_obj[key]) mat_obj[key].delete()
+                        mat_obj[key] = gray.clone()
+                        console.log('Mat 저장:', key)
+                        src.delete()
+                        gray.delete()
+                    }
+                }
+            }
+        }
+        input.click()
+    }
+
+
+    const viewResourceList = () => {
+        const imageNames = Object.keys(img_obj)
+        const slotNames = Object.keys(slots)
+
+        if (imageNames.length === 0 && slotNames.length === 0) {
+            alert('업로드된 이미지와 슬롯이 없습니다.')
+            return
+        }
+        const imageText = imageNames.length > 0 ? imageNames.join('\n') : '없음'
+        const slotText = slotNames.length > 0 ? slotNames.join('\n') : '없음'
+        alert(
+            `📦 슬롯 목록:\n${slotText}\n\n` +
+            `🖼 업로드된 이미지:\n${imageText}`
+        )
+    }
+
+
+    const createSlotUI = (name, data) => {
+        const container = document.getElementById('slotContainer')
+        const div = document.createElement('div')
+        div.className = 'slot'
+        const header = document.createElement('div')
+        header.className = 'slot-header'
+
+        const checkbox = document.createElement('input')
+        checkbox.type = 'checkbox'
+        checkbox.id = `slot-${name}`
+
+        const label = document.createElement('label')
+        label.className = 'slot-label'
+        label.htmlFor = checkbox.id
+        label.textContent = name
+
+        header.appendChild(checkbox)
+        header.appendChild(label)
+
+        div.appendChild(header)
+        container.appendChild(div)
+    }
+
+
+    const createImageMatchSlotUI = (name, data) => {
+        const container = document.getElementById('slotContainer')
+        const div = document.createElement('div')
+        div.className = 'slot'
+
+        // ===== 상단 라인 =====
+        const header = document.createElement('div')
+        header.className = 'slot-header'
+
+        // 좌측 체크박스
+        const checkbox = document.createElement('input')
+        checkbox.type = 'checkbox'
+        checkbox.id = `slot-${name}`
+
+        const label = document.createElement('label')
+        label.id = `label-${name}`
+        label.className = 'slot-label'
+        label.htmlFor = checkbox.id
+        label.textContent = name
+
+        // 👉 우측 토글 체크박스 (이미지 표시용)
+        const toggle = document.createElement('input')
+        toggle.type = 'checkbox'
+        toggle.className = 'slot-toggle'
+        toggle.id = `toggle-${name}`
+
+        const toggleLabel = document.createElement('label')
+        toggleLabel.textContent = '자세히'
+        toggleLabel.htmlFor = toggle.id
+
+        // ===== 이미지 =====
+        const img = document.createElement('img')
+        // img.src = data.img
+        img.id = `img-${name}`
+        img.className = 'slot-image'
+        img.style.display = 'none' // 기본 숨김
+
+        // 토글 동작
+        toggle.addEventListener('change', () => {
+            img.style.display = toggle.checked ? 'block' : 'none'
+        })
+
+        // ===== 조립 =====
+        header.appendChild(checkbox)
+        header.appendChild(label)
+
+        const rightBox = document.createElement('div')
+        rightBox.className = 'slot-right'
+        rightBox.appendChild(toggle)
+        rightBox.appendChild(toggleLabel)
+
+        header.appendChild(rightBox)
+
+        div.appendChild(header)
+        div.appendChild(img)
+
+        container.appendChild(div)
+    }
+
+    const addSlot = () => {
+        for (let name in slots) {
+            const data = slots[name]
+
+            if (data.rendered) continue // 🔥 중복 생성 방지
+
+            if (data.type === 'timer') {
+                createSlotUI(name, data)
+            } else if (data.type === 'img') {
+                createImageMatchSlotUI(name, data)
+                document.getElementById(`img-${name}`).src = img_obj[slots[name].img[0].split('.')[0]] || ''
+                let mat_ary = []
+                slots[name].img.forEach(img => {
+                    mat_ary.push(mat_obj[img.split('.')[0]])
+                })
+                slots[name].mats = mat_ary
+            }
+            data.rendered = true // 🔥 생성 완료 표시
+        }
+        setTimeout(loop, 300)
+    }
+
+    const matchTemplate = (background, targets, scale = 1.0) => {
+        if (!background || !targets || targets.length === 0) return null
+
+        const startTime = performance.now()
+
+        let src = cv.imread(background)
+        let gray = new cv.Mat()
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+
+        const originalCols = gray.cols
+        const originalRows = gray.rows
+
+        if (scale !== 1.0) {
+            const dsize = new cv.Size(
+                Math.floor(originalCols * scale),
+                Math.floor(originalRows * scale)
+            )
+            let resized = new cv.Mat()
+            cv.resize(gray, resized, dsize, 0, 0, cv.INTER_AREA)
+            gray.delete()
+            gray = resized
+        }
+
+        // 🔥 평탄화 변수
+        let score = -1
+        let x = null
+        let y = null
+        let w = 0
+        let h = 0
+        let targetIndex = -1
+
+        targets.forEach((target, idx) => {
+            if (!target) return
+
+            let tpl = target
+
+            if (scale !== 1.0) {
+                const dsize = new cv.Size(
+                    Math.floor(target.cols * scale),
+                    Math.floor(target.rows * scale)
+                )
+                let resizedTpl = new cv.Mat()
+                cv.resize(target, resizedTpl, dsize, 0, 0, cv.INTER_AREA)
+                tpl = resizedTpl
+            }
+
+            if (gray.cols < tpl.cols || gray.rows < tpl.rows) {
+                if (tpl !== target) tpl.delete()
+                return
+            }
+
+            const result = new cv.Mat()
+            cv.matchTemplate(gray, tpl, result, cv.TM_CCOEFF_NORMED)
+
+            const minMax = cv.minMaxLoc(result)
+
+            if (minMax.maxVal > score) {
+                score = minMax.maxVal
+
+                x = Math.floor(minMax.maxLoc.x / scale)
+                y = Math.floor(minMax.maxLoc.y / scale)
+
+                // 🔥 원본 기준 크기
+                w = target.cols
+                h = target.rows
+
+                targetIndex = idx
+            }
+
+            result.delete()
+            if (tpl !== target) tpl.delete()
+        })
+
+        const endTime = performance.now()
+
+        src.delete()
+        gray.delete()
+
+        // 🔥 중심 좌표
+        let cx = null
+        let cy = null
+
+        if (x !== null && y !== null) {
+            cx = x + Math.floor(w / 2)
+            cy = y + Math.floor(h / 2)
+        }
+
+        return {
+            score,
+            x,
+            y,
+            w,
+            h,
+            cx,
+            cy,
+            targetIndex,
+            time: endTime - startTime
+        }
+    }
+
+
+
     //Main loop
     const loop = () => {
         if (showROI === true) {
@@ -404,6 +824,49 @@
                 }
             }
         }
+
+        // 이미지매칭
+        Object.keys(slots).forEach(name => {
+            if (slots[name].type == 'img') {
+                const cooltime = slots[name].cooltime
+                const cooling = slots[name].cooling
+                const mats = slots[name].mats
+                const threshold = slots[name].threshold
+                const x1 = slots[name].x1
+                const x2 = slots[name].x2
+                const y1 = slots[name].y1
+                const y2 = slots[name].y2
+                const key = slots[name].key
+
+                const w = x2 - x1
+                const h = y2 - y1
+                canvasCrop.width = w
+                canvasCrop.height = h
+
+                ctxCrop.drawImage(canvas, x1, y1, w, h, 0, 0, w, h)
+                const match = matchTemplate(canvasCrop, mats, 0.75)
+                document.getElementById(`label-${name}`).textContent = `${name} [${match.score.toFixed(2)}/${threshold}]`
+                if (match && match.cx !== null && match.cy !== null) {
+                    const { cx, cy } = match
+                    ctxCrop.strokeStyle = 'lime'   // 녹색
+                    ctxCrop.lineWidth = 10
+                    ctxCrop.beginPath()
+                    ctxCrop.moveTo(0, cy)
+                    ctxCrop.lineTo(canvasCrop.width, cy)
+                    ctxCrop.moveTo(cx, 0)
+                    ctxCrop.lineTo(cx, canvasCrop.height)
+                    ctxCrop.stroke()
+                }
+                slots[name].result = {
+                    value: match.score,
+                    cx: match.cx,
+                    cy: match.cy,
+                    bool: match.score >= threshold
+                }
+
+                document.getElementById(`img-${name}`).src = canvasCrop.toDataURL('image/png', 0.2)
+            }
+        })
         setTimeout(loop, 1000 / fps)
     }
 

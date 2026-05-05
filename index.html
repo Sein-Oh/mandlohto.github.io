@@ -1,536 +1,291 @@
 <!DOCTYPE html>
-<html lang='ko'>
+<html>
 
 <head>
-    <meta charset='UTF-8'>
-    <title>만들오토 v1.2 (2026.04.19)</title>
+    <meta charset='utf-8' />
+    <title>만들오토 v1.3 (2026.05.05)</title>
+    <script src='https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/lil-gui@0.21'></script>
+    <script async src="opencv.js" onload="cv_loaded()" type="text/javascript"></script>
+    <script src='webserial.js'></script>
     <style>
-        body {
-            font-size: 14px;
-            font-family: 'Segoe UI', Roboto, Apple SD Gothic Neo, sans-serif;
-            background: #f7f8fa;
-            color: #222;
-        }
-
-        fieldset {
-            margin: 6px;
-            padding: 8px 10px 10px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background: #fff;
-            box-sizing: border-box;
-        }
-
-        fieldset.mainFrame {
-            width: 420px;
-        }
-
-        fieldset legend {
-            font-weight: 600;
-            font-size: 13px;
-            padding: 0 6px;
-            color: #444;
-        }
-
-        select,
-        input {
-            height: 26px;
-            padding: 0 8px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font-size: 13px;
-            text-align: center;
-            background: #fff;
-            box-sizing: border-box;
-            transition: all 0.15s ease;
-        }
-
-        select:focus,
-        input:focus {
-            border-color: #4f80ff;
-            outline: none;
-            box-shadow: 0 0 0 2px rgba(79, 128, 255, 0.15);
-        }
-
-        select:disabled,
-        input[type='text']:disabled {
-            background: #f1f3f6;
-            color: #9aa0a6;
-            border: 1px dashed #c5cbd6;
-            cursor: not-allowed;
-        }
-
-        button {
-            height: 26px;
-            padding: 0 10px;
-            border: none;
-            border-radius: 6px;
-            background: #4f80ff;
-            color: #fff;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-
-        button:hover {
-            background: #3b6df0;
-        }
-
-        button:active {
-            transform: translateY(1px);
-            background: #335fd8;
-        }
-
-        button:disabled,
-        button[disabled] {
-            background: #c5cbe0;
-            /* 흐린 블루/그레이 */
-            color: #8a8fa3;
-            /* 텍스트도 흐리게 */
-            cursor: not-allowed;
-            transform: none;
-            /* 눌림 효과 제거 */
-            box-shadow: none;
-            opacity: 0.7;
-        }
-
-        /* disabled 상태에서는 hover/active 효과 제거 */
-        button:disabled:hover,
-        button:disabled:active {
-            background: #c5cbe0;
-        }
-
-        .row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .canvasWrapper {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 6px;
-            border-radius: 8px;
-            background: #f1f3f6;
-            max-height: 220px;
-            height: 220px;
-        }
-
-        .canvasWrapper canvas {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-            background: #000;
-            border-radius: 6px;
-        }
-
-        .container {
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            box-sizing: border-box;
-        }
-
-        .slot {
-            border: 1px solid #aaa;
-            border-radius: 6px;
-            padding: 6px;
-            margin: 2px 0;
-            background: #f9f9f9;
-        }
-
-        /* 상단 라인 */
-        .slot-header {
-            display: flex;
-            /* justify-content: space-between; */
-            align-items: center;
-        }
-
-        /* 우측 토글 영역 */
-        .slot-right {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        /* 이미지 */
-        .slot-image {
-            width: 340px;
-            height: 180px;
-            object-fit: contain;
-            margin-top: 5px;
-        }
-
-        .slot-label {
-            width: 260px;
-            background: #e1e4eb;
-        }
-
-        #slotContainer {
-            max-height: 200px;
-            overflow-y: auto;
+        .lil-gui {
+            --name-width: 60%;
         }
     </style>
-    <script src='capture.js'></script>
-    <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
 </head>
 
 <body>
-    <fieldset class='mainFrame'>
-        <legend>캡쳐설정</legend>
-        <div class='row'>
-            <select id='selectCapture' style='width:45%'>
-                <option value='none'>--- 캡쳐 선택 ---</option>
-                <option value='desktop'>데스크탑 캡쳐</option>
-                <option value='streaming'>스트리밍URL</option>
-                <!-- <option value='user'>웹캠(전면)</option>
-                <option value='environment'>웹캠(후면)</option> -->
-            </select>
-            <select id='selectFPS' style='width:25%'>
-                <option value='30'>30 FPS</option>
-                <option value='10'>10 FPS</option>
-                <option value='5' selected>5 FPS</option>
-                <option value='2'>2 FPS</option>
-                <option value='1'>1 FPS</option>
-            </select>
-            <select id='selectROI' style='width:30%'>
-                <option value='false'>캡쳐도구: 닫기</option>
-                <option value='true'>캡쳐도구: 열기</option>
-            </select>
-        </div>
-        <div class='canvasWrapper'>
-            <canvas id='canvas'></canvas>
-        </div>
-        <div id='containerROI' class='container' style='display:none'>
-            <div class='row'>
-                <span>캡쳐영역</span>
-                <input id='inputROI' type='text' style='width:40%' placeholder='x, y, w, h' disabled='true'>
-                <button id='btnRecord' style='width:20%' id='btnRecord' onclick='startRecording()'>캡쳐 녹화</button>
-                <button id='btnCapture' style='width:20%' onclick='saveCapture()'>스크린샷</button>
-            </div>
-            <div id='canvasROIWrapper' class='canvasWrapper'>
-                <canvas id='canvasROI'></canvas>
-            </div>
-        </div>
-    </fieldset>
-
-    <fieldset class='mainFrame'>
-        <legend>입력설정</legend>
-        <div class='row'>
-            <select id='selectInput' style='width:40%'>
-                <option value='none'>--입력방법 선택--</option>
-                <option value='arduino'>아두이노</option>
-                <option value='server'>서버</option>
-            </select>
-            <input type='text' id='inputTest' style='width:30%' placeholder='테스트 명령어'>
-            <button style='width:30%' onclick='executeTest()'>실행</button>
-        </div>
-    </fieldset>
-
-    <fieldset class='mainFrame'>
-        <legend>리소스</legend>
-        <div class='row'>
-            <button onclick='addResource()' style='width:33%'>업로드</button>
-            <button id='btn_addSlot' onclick='addSlot()' style='width:33%' disabled>슬롯 생성</button>
-            <button onclick='viewResourceList()' style='width:33%'>리소스 목록 확인</button>
-        </div>
-    </fieldset>
-
-    <fieldset class='mainFrame'>
-        <legend>슬롯</legend>
-        <div id='slotContainer' class='container'>
-        </div>
-    </fieldset>
 </body>
 <script>
-    const slots = {}
+    let myVideo
+    let cnv
+    let cnv_width = 320
+    let captureMode = 'Screen'
+    let stream_url = ''
+    let input_url = ''
+    let input_ready = false
 
-    const canvas = document.getElementById('canvas')
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    canvas.width = 400
-    canvas.height = 225
+    const serial = new WebSerialManager()
+
+    const canvas = document.createElement('canvas', { willReadFrequently: true })
+    const ctx = canvas.getContext('2d')
     const canvasCrop = document.createElement('canvas')
     const ctxCrop = canvasCrop.getContext('2d', { willReadFrequently: true })
 
-    let fps = 5
-    const cap = new Capture(canvas, { fps: fps })
-    let captureSize = { width: 0, height: 0 }
-    let showROI = false
 
+    const gui = new lil.GUI({ title: 'Mandlauto' })
+    gui.domElement.style.position = 'fixed'
+    gui.domElement.style.width = `${cnv_width}px`
+    gui.domElement.style.top = '190px'
+    gui.domElement.style.left = '5px'
+    gui.domElement.style.right = 'auto'
 
-    const canvasROI = document.getElementById('canvasROI')
-    const ctxROI = canvasROI.getContext('2d', { willReadFrequently: true })
-    canvasROI.width = 400
-    canvasROI.height = 225
-
-
-    const inputROI = document.getElementById('inputROI')
-    let recordInterval = null
-    let onRecord = false
-
-    let port = null
-    let writer = null
-    const encoder = new TextEncoder()
-    let inputURL = ''
-    let inputType = null
-    let streamURL = ''
-
+    const slots = {}
     const img_obj = {}
-    const mat_obj = {}
+    const img_mat_obj = {}
 
-
-    window.onload = () => {
-        console.log('만들오토 v1.2 (2026.04.19)')
-        inputURL = localStorage.getItem('inputURL')
-        streamURL = localStorage.getItem('streamURL')
-        // console.log(inputURL, streamURL)
-    }
-
-
-    const cvLoaded = () => {
+    const cv_loaded = () => {
         cv.onRuntimeInitialized = () => {
             console.log("Opencv is loaded")
-            document.getElementById('btn_addSlot').disabled = false
+            btn_add_img.enable()
         }
     }
 
-
-    //FPS 셀렉트
-    document.getElementById('selectFPS').addEventListener('change', event => {
-        fps = parseInt(event.target.value)
-        cap.setFPS(fps)
-        console.log(`FPS: ${fps} 적용.`)
-    })
-
-
-    //캡쳐 셀렉트
-    document.getElementById('selectCapture').addEventListener('change', event => {
-        const value = event.target.value
-        if (value === 'desktop') {
-            cap.startDesktop().then(() => {
-                captureSize = cap.getSourceSize()
-                canvas.width = captureSize.width, canvas.height = captureSize.height
-                console.log(`데스크탑 캡쳐 시작. 캡쳐영역: ${captureSize.width}x${captureSize.height}`)
-                inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
-            })
-        }
-        else if (value === 'streaming') {
-            const url = prompt('스트리밍 URL을 입력하세요 (예: http://localhost:8000)', streamURL || 'http://localhost:8000')
-            cap.startStream(url).then(() => {
-                captureSize = cap.getSourceSize()
-                canvas.width = captureSize.width, canvas.height = captureSize.height
-                console.log(`스트리밍 캡쳐 시작. 캡쳐영역: ${captureSize.width}x${captureSize.height}`)
-                inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
-                localStorage.setItem('streamURL', url)
-            })
-        }
-        else if (value === 'user') {
-            cap.startWebcam('user').then(() => {
-                captureSize = cap.getSourceSize()
-                canvas.width = captureSize.width, canvas.height = captureSize.height
-                console.log(`웹캠(전면) 캡쳐 시작. 캡쳐영역: ${captureSize.width}x${captureSize.height}`)
-                inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
-            })
-        }
-        else if (value === 'environment') {
-            cap.startWebcam('environment').then(() => {
-                captureSize = cap.getSourceSize()
-                canvas.width = captureSize.width, canvas.height = captureSize.height
-                console.log(`웹캠(후면) 캡쳐 시작. 캡쳐영역: ${captureSize.width}x${captureSize.height}`)
-                inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
-            })
-        }
-        cap.setFPS(fps)
-    })
-
-
-    //캡쳐영역 도구 셀렉트
-    document.getElementById('selectROI').addEventListener('change', event => {
-        const value = event.target.value
-        if (value === 'true') {
-            document.getElementById('containerROI').style.display = 'flex'
-            document.getElementById('inputROI').disabled = false
-            showROI = true
-            inputROI.value = `0, 0, ${captureSize.width}, ${captureSize.height}`
-        } else {
-            document.getElementById('containerROI').style.display = 'none'
-            document.getElementById('inputROI').disabled = true
-            showROI = false
-        }
-    })
-
-
-    //입력방법 셀렉트
-    document.getElementById('selectInput').addEventListener('change', event => {
-        const value = event.target.value
-        if (value === 'arduino') {
-            connectSerial()
-        } else if (value === 'server') {
-            inputURL = prompt('서버 주소를 입력하세요. 예)http://localhost:8000/input/', inputURL || 'http://localhost:8000/input/')
-            inputType = 'server'
-            document.getElementById('selectInput').disabled = true
-            localStorage.setItem('inputURL', inputURL)
-        } else {
-            document.getElementById('inputOption').value = ''
-            inputType = null
-        }
-    })
-
-
-    const connectSerial = async () => {
-        try {
-            if (!('serial' in navigator)) {
-                alert('Web Serial API를 지원하지 않는 브라우저입니다.')
-                return
+    const gui_obj = {
+        captureMode: '--------',
+        inputMode: '--------',
+        streamURL: '',
+        inputURL: '',
+        fps: 5,
+        start: function () {
+            if (gui_obj.captureMode === 'Camera') {
+                getCamera()
+            } else if (gui_obj.captureMode === 'Screen') {
+                startScreenCapture()
+            } else if (gui_obj.captureMode === 'URL') {
+                getStream()
+            } else {
+                alert('Please select a capture mode')
             }
-            port = await navigator.serial.requestPort()
-            await port.open({ baudRate: 9600 })
-            writer = port.writable.getWriter()
-            document.getElementById('selectInput').disabled = true
-            inputType = 'serial'
-            console.log('✅ Serial connected')
-        } catch (err) {
-            console.error('❌ Serial connect error:', err)
-            document.getElementById('selectInput').value = 'none'
-            alert('시리얼 연결 실패.')
-            inputType = null
+        },
+        connect: async function () {
+            if (gui_obj.inputMode === 'Serial') {
+                const recv_callback = data => {
+                    console.log('Received data:', data)
+                    btn_inputMode.hide()
+                    btn_input_start.hide()
+                    input_ready = true
+                }
+                serial.setReceiveHandler(recv_callback)
+                await serial.connect()
+                if (serial.isConnected) {
+                    console.log('Serial connected')
+                    serial.send('check')
+                } else {
+                    console.log('Serial connection failed')
+                }
+            } else if (gui_obj.inputMode === 'URL') {
+                try {
+                    let url = gui_obj.inputURL
+                    url = url.endsWith('/') ? url : `${url}/`
+                    const res = await fetch(`${url}check`)
+                    const text = await res.text()
+                    if (text === 'ok') {
+                        console.log('Input URL is valid')
+                        localStorage.setItem('input_url', gui_obj.inputURL)
+                        btn_inputMode.hide()
+                        btn_input_start.hide()
+                        inputURL.hide()
+                        input_ready = true
+                    } else {
+                        console.warn('Input URL responded with unexpected text:', text)
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch input URL:', err)
+                }
+            }
+        },
+        capture: function () {
+            captureVideoFrame()
+        },
+        add_img: function () {
+            add_img()
+        },
+        add_txt: function () {
+            add_txt()
         }
     }
 
-
-    const sendSerial = async (data) => {
-        if (!writer) return
-        try {
-            const buffer = encoder.encode(data)
-            await writer.write(buffer)
-            console.log('➡️ Sent:', data)
-        } catch (err) {
-            console.error('❌ Send error:', err)
-        }
-    }
-
-
-    const sendURL = async (command) => {
-        const url = inputURL.endsWith("/") ? inputURL + command : inputURL + "/" + command
-        try {
-            await fetch(url)
-            console.log(`Sent command: ${command}`)
-        } catch (err) {
-            console.error(`Failed to send command: ${command}`)
-        }
-    }
-
-
-    const send = (command) => {
-        if (inputType === 'serial') {
-            sendSerial(command)
-        } else if (inputType === 'server') {
-            sendURL(command)
+    const btn_captureMode = gui.add(gui_obj, 'captureMode').options(['Screen', 'Camera', 'URL']).name('Capture Mode').onChange((value) => {
+        if (gui_obj.captureMode === 'URL') {
+            streamURL.setValue('')
+            streamURL.setValue(stream_url)
+            streamURL.show()
         } else {
-            console.warn('No input method selected.')
+            streamURL.hide()
         }
-    }
+    })
+    const streamURL = gui.add(gui_obj, 'streamURL').name('Stream URL').hide()
+    const btn_start = gui.add(gui_obj, 'start').name('Start Capture')
 
-
-    const executeTest = () => {
-        const command = document.getElementById('inputTest').value.trim()
-        if (command) {
-            send(command)
+    const btn_inputMode = gui.add(gui_obj, 'inputMode').options(['Serial', 'URL']).name('Input Mode').onChange((value) => {
+        if (gui_obj.inputMode === 'URL') {
+            inputURL.setValue('')
+            inputURL.setValue(input_url)
+            inputURL.show()
         } else {
-            alert('테스트 명령어를 입력하세요.')
+            inputURL.hide()
         }
+    })
+    const inputURL = gui.add(gui_obj, 'inputURL').name('Input URL').hide()
+    const btn_input_start = gui.add(gui_obj, 'connect').name('Connect Input')
+
+    const btn_fps = gui.add(gui_obj, 'fps').options([1, 2, 3, 5, 10]).name('Frame Rate').onChange(value => {
+        console.log('FPS set to:', value)
+        frameRate(value)
+    })
+    gui.add(gui_obj, 'capture').name('Capture Image')
+
+    const btn_add_img = gui.add(gui_obj, 'add_img').name('Add Image (0)').disable()
+    const btn_add_txt = gui.add(gui_obj, 'add_txt').name('Add Slot (0)')
+
+    function hide_capture_ui() {
+        btn_start.hide()
+        btn_captureMode.hide()
+        streamURL.hide()
     }
 
+    function add_img() {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/*'
+        input.multiple = true
 
-    const getTimestamp = () => {
-        const now = new Date()
-        const yy = now.getFullYear().toString().slice(-2)
-        const mm = String(now.getMonth() + 1).padStart(2, '0')
-        const dd = String(now.getDate()).padStart(2, '0')
-        const hh = String(now.getHours()).padStart(2, '0')
-        const min = String(now.getMinutes()).padStart(2, '0')
-        const ss = String(now.getSeconds()).padStart(2, '0')
-        const timestamp = `${yy}${mm}${dd}${hh}${min}${ss}`
-        return timestamp
-    }
+        input.onchange = async e => {
+            const files = Array.from(e.target.files)
+            console.log('Selected files:', files.length)
+            if (files.length === 0) return
 
+            const tasks = files.map(file => {
+                return new Promise(resolve => {
+                    const name = file.name
+                    const key = name.split('.')[0]
 
-    //Capture
-    const saveCapture = () => {
-        const data_url = canvasROI.toDataURL("image/png")
-        const link = document.createElement("a")
-        const timestamp = getTimestamp()
-        const ROI = inputROI.value.split(',').map(v => Number(v.trim())).toString()
-        link.href = data_url
-        link.download = `${timestamp}_${ROI}.png`
-        link.click()
-        console.log(`캡쳐 저장: ${link.download}`)
-    }
+                    // 🔴 중복 체크 (continue 느낌)
+                    if (img_obj[key]) {
+                        console.warn('이미 존재:', key)
+                        resolve()
+                        return
+                    }
 
+                    const url = URL.createObjectURL(file)
+                    img_obj[key] = url
+                    console.log('Image added:', name)
 
-    //Recording
-    const startRecording = () => {
-        onRecord = !onRecord
-        if (onRecord) {
-            recordInterval = setInterval(saveCapture, 1000)
-            console.log('녹화 시작')
-            document.getElementById('btnRecord').textContent = "녹화 중지"
-            document.getElementById('btnRecord').style.background = '#d9534f'
-        } else {
-            clearInterval(recordInterval)
-            recordInterval = null
-            console.log('녹화 종료')
-            document.getElementById('btnRecord').textContent = "캡쳐 녹화"
-            document.getElementById('btnRecord').style.background = '#4f80ff'
+                    const img = new Image()
+                    img.src = url
+
+                    img.onload = () => {
+                        try {
+                            const src = cv.imread(img)
+                            const gray = new cv.Mat()
+
+                            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+
+                            // 기존 Mat 정리
+                            if (img_mat_obj[key]) {
+                                img_mat_obj[key].delete()
+                            }
+
+                            img_mat_obj[key] = gray.clone()
+                            console.log('Mat created:', key)
+
+                            // 메모리 해제
+                            src.delete()
+                            gray.delete()
+                        } catch (err) {
+                            console.error('OpenCV 처리 실패:', key, err)
+                        }
+
+                        resolve()
+                    }
+
+                    img.onerror = err => {
+                        console.error('이미지 로드 실패:', key, err)
+                        resolve()
+                    }
+                })
+            })
+
+            // 👇 모든 이미지 처리 완료 후 UI 업데이트
+            await Promise.all(tasks)
+
+            btn_add_img.name(`Add Image (${Object.keys(img_obj).length})`)
         }
+
+        input.click()
     }
 
+    const validate_slot = data => {
+        // 공통 체크 (0 허용하도록 수정)
+        if (!data.type || !data.key || data.cooltime === undefined) return false
 
-    const validateSlotData = data => {
-        if (!data.type || !data.key || !data.cooltime) return false
+        // 숫자 체크 헬퍼
+        const isNum = v => typeof v === 'number' && !isNaN(v)
 
-        // 🔹 timer 타입
         if (data.type === 'timer') {
             return (
                 typeof data.key === 'string' &&
-                !isNaN(data.cooltime)
+                isNum(data.cooltime)
             )
         }
 
-        // 🔹 img 타입
         if (data.type === 'img') {
+            // 🔴 img 배열 체크 + 모든 요소가 img_mat_obj에 존재해야 함
+            console.log(name)
+            const validImgs =
+                Array.isArray(data.img) &&
+                data.img.length > 0 &&
+                data.img.every(name => img_mat_obj[name.split('.')[0]])
+
             return (
-                data.img &&
-                !isNaN(data.cooltime) &&
-                !isNaN(data.x1) &&
-                !isNaN(data.y1) &&
-                !isNaN(data.x2) &&
-                !isNaN(data.y2) &&
-                !isNaN(data.threshold)
+                validImgs &&
+                isNum(data.cooltime) &&
+                isNum(data.x1) &&
+                isNum(data.y1) &&
+                isNum(data.x2) &&
+                isNum(data.y2) &&
+                isNum(data.threshold)
             )
         }
 
         return false
     }
 
-
-    const addResource = () => {
+    function add_txt() {
         const input = document.createElement('input')
         input.type = 'file'
-        input.accept = '.txt,image/*'
+        input.accept = '.txt'
         input.multiple = true
 
-        input.onchange = e => {
-            const files = e.target.files
-            if (!files || files.length === 0) return
-            for (let file of files) {
-                const isText = file.name.endsWith('.txt')
-                if (isText) {
+        input.onchange = async e => {
+            const files = Array.from(e.target.files)
+            if (files.length === 0) return
+
+            // 모든 파일을 Promise로 처리
+            const tasks = files.map(file => {
+                return new Promise(resolve => {
                     const reader = new FileReader()
                     reader.onload = event => {
+                        const name = file.name.replace('.txt', '')
+                        if (slots[name]) {
+                            resolve()
+                            return
+                        }
+                        // Add gui
+                        gui_obj[name] = false
+
                         const text = event.target.result
                         const lines = text.split('\n')
                         const data = {}
@@ -545,168 +300,128 @@
                                 data[key] = value
                             }
                         })
+                        // 숫자 변환
                         if (data.cooltime) data.cooltime = Number(data.cooltime)
                         if (data.threshold) data.threshold = Number(data.threshold)
                         if (data.x1) data.x1 = Number(data.x1)
                         if (data.x2) data.x2 = Number(data.x2)
                         if (data.y1) data.y1 = Number(data.y1)
                         if (data.y2) data.y2 = Number(data.y2)
-
+                        if (typeof (data.scale) == 'undefined') {
+                            data.scale = 1
+                        } else {
+                            data.scale = Number(data.scale)
+                        }
                         data.cooling = false
+                        data.run = false
                         data.result = { value: 0, cx: 0, cy: 0, bool: false }
-                        const name = file.name.replace('.txt', '')
-                        if (!validateSlotData(data)) return
-                        slots[name] = data
-                        // cooling 추가
+                        if (validate_slot(data)) {
+                            slots[name] = data
+                        } else {
+                            console.warn('Invalid slot data:', name, data)
+                        }
+                        resolve()
                     }
                     reader.readAsText(file)
+                })
+            })
+            await Promise.all(tasks)
+            btn_add_txt.name(`Add Slot (${Object.keys(slots).length})`)
+            Object.keys(slots).forEach(key => {
+                if (gui.controllers.find(c => c.property === key) === undefined) {
+                    console.log(`Slot: ${key}, Type: ${slots[key].type}, Cooltime: ${slots[key].cooltime}s`)
+                    gui.add(gui_obj, key).name(key).onChange(value => {
+                        slots[key].run = value
+                    })
                 } else {
-                    // 🔥 핵심: 바로 src로 사용 가능하게 변환
-                    const url = URL.createObjectURL(file)
-                    img_obj[file.name.split('.')[0]] = url
-                    console.log('이미지 추가:', file.name)
-
-                    // Mat 객체로도 저장 (추후 OpenCV 처리용)
-                    const img = new Image()
-                    img.src = url
-                    img.onload = () => {
-                        const src = cv.imread(img)
-                        const gray = new cv.Mat()
-                        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
-                        const key = file.name.split('.')[0]
-                        if (mat_obj[key]) mat_obj[key].delete()
-                        mat_obj[key] = gray.clone()
-                        console.log('Mat 저장:', key)
-                        src.delete()
-                        gray.delete()
-                    }
+                    console.log(`${key} already exist.`)
                 }
-            }
+            })
         }
         input.click()
     }
 
-
-    const viewResourceList = () => {
-        const imageNames = Object.keys(img_obj)
-        const slotNames = Object.keys(slots)
-
-        if (imageNames.length === 0 && slotNames.length === 0) {
-            alert('업로드된 이미지와 슬롯이 없습니다.')
-            return
+    async function startScreenCapture() {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true })
+        myVideo = createVideo()
+        myVideo.elt.srcObject = stream
+        myVideo.elt.play()
+        myVideo.hide()
+        while (myVideo.elt.videoWidth === 0) {
+            await new Promise(resolve => setTimeout(resolve, 200))
+            console.log('Waiting for video to load...')
         }
-        const imageText = imageNames.length > 0 ? imageNames.join('\n') : '없음'
-        const slotText = slotNames.length > 0 ? slotNames.join('\n') : '없음'
-        alert(
-            `📦 슬롯 목록:\n${slotText}\n\n` +
-            `🖼 업로드된 이미지:\n${imageText}`
-        )
+        console.log(`Video size: ${myVideo.elt.videoWidth}x${myVideo.elt.videoHeight}`)
+        const ratio = Number(myVideo.elt.videoWidth / cnv_width)
+        cnv.resize(myVideo.elt.videoWidth / ratio, myVideo.elt.videoHeight / ratio)
+        console.log(`Canvas size: ${width}x${height}`)
+        gui.domElement.style.top = `${height + 10}px`
+        hide_capture_ui()
+        canvas.width = myVideo.elt.videoWidth
+        canvas.height = myVideo.elt.videoHeight
     }
 
-
-    const createSlotUI = (name, data) => {
-        const container = document.getElementById('slotContainer')
-        const div = document.createElement('div')
-        div.className = 'slot'
-        const header = document.createElement('div')
-        header.className = 'slot-header'
-
-        const checkbox = document.createElement('input')
-        checkbox.type = 'checkbox'
-        checkbox.id = `slot-${name}`
-
-        const label = document.createElement('label')
-        label.className = 'slot-label'
-        label.htmlFor = checkbox.id
-        label.textContent = name
-
-        header.appendChild(checkbox)
-        header.appendChild(label)
-
-        div.appendChild(header)
-        container.appendChild(div)
-    }
-
-
-    const createImageMatchSlotUI = (name, data) => {
-        const container = document.getElementById('slotContainer')
-        const div = document.createElement('div')
-        div.className = 'slot'
-
-        // ===== 상단 라인 =====
-        const header = document.createElement('div')
-        header.className = 'slot-header'
-
-        // 좌측 체크박스
-        const checkbox = document.createElement('input')
-        checkbox.type = 'checkbox'
-        checkbox.id = `slot-${name}`
-
-        const label = document.createElement('label')
-        label.id = `label-${name}`
-        label.className = 'slot-label'
-        label.htmlFor = checkbox.id
-        label.textContent = name
-
-        // 👉 우측 토글 체크박스 (이미지 표시용)
-        const toggle = document.createElement('input')
-        toggle.type = 'checkbox'
-        toggle.className = 'slot-toggle'
-        toggle.id = `toggle-${name}`
-
-        const toggleLabel = document.createElement('label')
-        toggleLabel.textContent = '자세히'
-        toggleLabel.htmlFor = toggle.id
-
-        // ===== 이미지 =====
-        const img = document.createElement('img')
-        // img.src = data.img
-        img.id = `img-${name}`
-        img.className = 'slot-image'
-        img.style.display = 'none' // 기본 숨김
-
-        // 토글 동작
-        toggle.addEventListener('change', () => {
-            img.style.display = toggle.checked ? 'block' : 'none'
-        })
-
-        // ===== 조립 =====
-        header.appendChild(checkbox)
-        header.appendChild(label)
-
-        const rightBox = document.createElement('div')
-        rightBox.className = 'slot-right'
-        rightBox.appendChild(toggle)
-        rightBox.appendChild(toggleLabel)
-
-        header.appendChild(rightBox)
-
-        div.appendChild(header)
-        div.appendChild(img)
-
-        container.appendChild(div)
-    }
-
-    const addSlot = () => {
-        for (let name in slots) {
-            const data = slots[name]
-
-            if (data.rendered) continue // 🔥 중복 생성 방지
-
-            if (data.type === 'timer') {
-                createSlotUI(name, data)
-            } else if (data.type === 'img') {
-                createImageMatchSlotUI(name, data)
-                document.getElementById(`img-${name}`).src = img_obj[slots[name].img[0].split('.')[0]] || ''
-                let mat_ary = []
-                slots[name].img.forEach(img => {
-                    mat_ary.push(mat_obj[img.split('.')[0]])
-                })
-                slots[name].mats = mat_ary
-            }
-            data.rendered = true // 🔥 생성 완료 표시
+    async function getCamera() {
+        myVideo = createCapture(VIDEO)
+        myVideo.hide()
+        while (myVideo.elt.videoWidth === 0) {
+            await new Promise(resolve => setTimeout(resolve, 200))
+            console.log('Waiting for video to load...')
         }
-        setTimeout(loop, 300)
+        console.log(`Video size: ${myVideo.elt.videoWidth}x${myVideo.elt.videoHeight}`)
+        const ratio = Number(myVideo.elt.videoWidth / cnv_width)
+        cnv.resize(myVideo.elt.videoWidth / ratio, myVideo.elt.videoHeight / ratio)
+        console.log(`Canvas size: ${width}x${height}`)
+        gui.domElement.style.top = `${height + 10}px`
+        hide_capture_ui()
+        canvas.width = myVideo.elt.videoWidth
+        canvas.height = myVideo.elt.videoHeight
+    }
+
+    async function getStream() {
+        myVideo = createImg(gui_obj.streamURL, 'stream')
+        myVideo.elt.crossOrigin = 'anonymous'
+        myVideo.hide()
+        let counter = 0
+        while (myVideo.elt.naturalWidth === 0 && counter < 10) {
+            await new Promise(resolve => setTimeout(resolve, 200))
+            console.log('Waiting for video to load...')
+            counter++
+        }
+        myVideo.elt.videoWidth = myVideo.elt.naturalWidth
+        myVideo.elt.videoHeight = myVideo.elt.naturalHeight
+        console.log(`Video size: ${myVideo.elt.videoWidth}x${myVideo.elt.videoHeight}`)
+        const ratio = Number(myVideo.elt.videoWidth / cnv_width)
+        cnv.resize(myVideo.elt.videoWidth / ratio, myVideo.elt.videoHeight / ratio)
+        console.log(`Canvas size: ${width}x${height}`)
+        gui.domElement.style.top = `${height + 10}px`
+        hide_capture_ui()
+        canvas.width = myVideo.elt.naturalWidth
+        canvas.height = myVideo.elt.naturalHeight
+        localStorage.setItem('stream_url', gui_obj.streamURL)
+    }
+
+
+    function getTimestamp() {
+        let now = new Date()
+        let YY = String(now.getFullYear()).slice(-2)
+        let MM = String(now.getMonth() + 1).padStart(2, '0')
+        let DD = String(now.getDate()).padStart(2, '0')
+        let HH = String(now.getHours()).padStart(2, '0')
+        let mm = String(now.getMinutes()).padStart(2, '0')
+        let SS = String(now.getSeconds()).padStart(2, '0')
+        return `${YY}${MM}${DD}${HH}${mm}${SS}`
+    }
+
+
+    function captureVideoFrame() {
+        canvas.toBlob(blob => {
+            const a = document.createElement('a')
+            a.href = URL.createObjectURL(blob)
+            a.download = `capture_${getTimestamp()}.png`
+            a.click()
+            URL.revokeObjectURL(a.href)
+        }, 'image/png')
     }
 
     const matchTemplate = (background, targets, scale = 1.0) => {
@@ -795,81 +510,102 @@
             cx = x + Math.floor(w / 2)
             cy = y + Math.floor(h / 2)
         }
+        return { score, x, y, w, h, cx, cy, targetIndex, time: endTime - startTime }
+    }
 
-        return {
-            score,
-            x,
-            y,
-            w,
-            h,
-            cx,
-            cy,
-            targetIndex,
-            time: endTime - startTime
+    function send_key(key) {
+        if (input_ready) {
+            // console.log('Send key:', key)
+            if (gui_obj.inputMode === 'Serial') {
+                serial.send(key)
+            } else if (gui_obj.inputMode === 'URL') {
+                let url = gui_obj.inputURL
+                url = url.endsWith('/') ? url : `${url}/`
+                fetch(`${url}${key}`)
+            }
+        } else {
+            console.warn('Input not ready, cannot send key:', key)
         }
     }
 
 
+    function setup() {
+        frameRate(10)
+        pixelDensity(1)
+        cnv = createCanvas(cnv_width, 180)
+        cnv.position(5, 5)
+        background(180)
+    }
 
-    //Main loop
-    const loop = () => {
-        if (showROI === true) {
-            if (inputROI.value.split(',').length === 4) {
-                // ROI : x1, y1, x2, y2
-                const ROI = inputROI.value.split(',').map(v => Number(v.trim()))
-                if (ROI[2] > 0 && ROI[3] > 0) {
-                    canvasROI.width = ROI[2] - ROI[0]
-                    canvasROI.height = ROI[3] - ROI[1]
-                    ctxROI.drawImage(cap.getSourceElement(), ROI[0], ROI[1], ROI[2] - ROI[0], ROI[3] - ROI[1], 0, 0, ROI[2] - ROI[0], ROI[3] - ROI[1])
-                }
-            }
+    function draw() {
+        if (myVideo) {
+            image(myVideo, 0, 0, width, height)
+            ctx.drawImage(myVideo.elt, 0, 0, canvas.width, canvas.height)
         }
 
-        // 이미지매칭
+        // Timer
         Object.keys(slots).forEach(name => {
-            if (slots[name].type == 'img') {
+            if (slots[name]['type'] == 'timer') {
+                if (slots[name]['run'] && !slots[name]['cooling']) {
+                    // console.log(`Timer ${name} is running`)
+                    slots[name]['cooling'] = true
+                    const cooltime = slots[name].cooltime
+                    const key = slots[name].key
+                    setTimeout(() => {slots[name]['cooling'] = false}, cooltime * 1000)
+                    send_key(key)
+                }
+            }
+        })
+
+        // Image Matching
+        Object.keys(slots).forEach(name => {
+            if (slots[name]['type'] == 'img') {
                 const cooltime = slots[name].cooltime
                 const cooling = slots[name].cooling
-                const mats = slots[name].mats
+                let mats = []
+                slots[name].img.forEach(key => {
+                    mats.push(img_mat_obj[key.split('.')[0]])
+                })
                 const threshold = slots[name].threshold
                 const x1 = slots[name].x1
                 const x2 = slots[name].x2
                 const y1 = slots[name].y1
                 const y2 = slots[name].y2
                 const key = slots[name].key
+                const scale = slots[name].scale
 
                 const w = x2 - x1
                 const h = y2 - y1
                 canvasCrop.width = w
                 canvasCrop.height = h
-
                 ctxCrop.drawImage(canvas, x1, y1, w, h, 0, 0, w, h)
-                const match = matchTemplate(canvasCrop, mats, 0.75)
-                document.getElementById(`label-${name}`).textContent = `${name} [${match.score.toFixed(2)}/${threshold}]`
-                if (match && match.cx !== null && match.cy !== null) {
-                    const { cx, cy } = match
-                    ctxCrop.strokeStyle = 'lime'   // 녹색
-                    ctxCrop.lineWidth = 10
-                    ctxCrop.beginPath()
-                    ctxCrop.moveTo(0, cy)
-                    ctxCrop.lineTo(canvasCrop.width, cy)
-                    ctxCrop.moveTo(cx, 0)
-                    ctxCrop.lineTo(cx, canvasCrop.height)
-                    ctxCrop.stroke()
-                }
-                slots[name].result = {
-                    value: match.score,
-                    cx: match.cx,
-                    cy: match.cy,
-                    bool: match.score >= threshold
-                }
 
-                document.getElementById(`img-${name}`).src = canvasCrop.toDataURL('image/png', 0.2)
+                const match = matchTemplate(canvasCrop, mats, scale)
+                slots[name].result.value = match.score
+                slots[name].result.bool = match.score >= threshold
+                slots[name].result.cx = match.score >= threshold ? match.cx + x1 : 0
+                slots[name].result.cy = match.score >= threshold ? match.cy + y1 : 0
+
+                gui.controllers.find( c => c.property === name).name(`${name} [${match.score.toFixed(2)}] (${slots[name]['result'].cx}, ${slots[name]['result'].cy})`)
+
+                if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']['bool']) {
+                    // console.log(`Image matching ${name} is running`)
+                    slots[name]['cooling'] = true
+                    setTimeout(() => {slots[name]['cooling'] = false}, cooltime * 1000)
+                    send_key(key)
+                }
             }
         })
-        setTimeout(loop, 1000 / fps)
     }
 
+    window.onload = () => {
+        console.log('Window.onload.')
+        input_url = localStorage.getItem('input_url') || ''
+        stream_url = localStorage.getItem('stream_url') || ''
+        console.log('Loaded URLs:', { input_url, stream_url })
+        gui_obj.inputURL = input_url
+        gui_obj.streamURL = stream_url
+    }
 </script>
 
 </html>

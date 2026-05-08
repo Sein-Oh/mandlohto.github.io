@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang='ko'>
 
 <head>
-    <meta charset='utf-8' />
-    <title>만들오토 v1.3 (2026.05.05)</title>
-    <script src='https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.min.js'></script>
+    <meta charset='UTF-8'>
+    <title>만들오토 v1.3 (2026.05.08)</title>
     <script src='https://cdn.jsdelivr.net/npm/lil-gui@0.21'></script>
-    <script async src="opencv.js" onload="cv_loaded()" type="text/javascript"></script>
+    <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
+    <script src='capture.js'></script>
     <script src='webserial.js'></script>
     <style>
         .lil-gui {
@@ -17,146 +17,217 @@
 
 <body>
 </body>
+
 <script>
-    let myVideo
-    let cnv
-    let cnv_width = 320
-    let captureMode = 'Screen'
-    let stream_url = ''
-    let input_url = ''
-    let input_ready = false
+    let inputURL, streamURL
 
-    const serial = new WebSerialManager()
-
-    const canvas = document.createElement('canvas', { willReadFrequently: true })
-    const ctx = canvas.getContext('2d')
     const canvasCrop = document.createElement('canvas')
     const ctxCrop = canvasCrop.getContext('2d', { willReadFrequently: true })
-
-
-    const gui = new lil.GUI({ title: 'Mandlauto' })
-    gui.domElement.style.position = 'fixed'
-    gui.domElement.style.width = `${cnv_width}px`
-    gui.domElement.style.top = '190px'
-    gui.domElement.style.left = '5px'
-    gui.domElement.style.right = 'auto'
 
     const slots = {}
     const img_obj = {}
     const img_mat_obj = {}
 
-    const cv_loaded = () => {
-        cv.onRuntimeInitialized = () => {
-            console.log("Opencv is loaded")
-            btn_add_img.enable()
-        }
-    }
 
-    const gui_obj = {
-        captureMode: '--------',
-        inputMode: '--------',
-        streamURL: '',
-        inputURL: '',
+    const target_width = 320
+    const cap = new Capture()
+    const serial = new WebSerialManager()
+
+
+
+    const gui = new lil.GUI({ title: 'Mandlauto' })
+    const folderCapture = gui.addFolder('Capture')
+    const folderInput = gui.addFolder('Input')
+    const folderSlot = gui.addFolder('Slot')
+
+
+    const guiObj = {
+        captureMode: 'None',
         fps: 5,
-        start: function () {
-            if (gui_obj.captureMode === 'Camera') {
-                getCamera()
-            } else if (gui_obj.captureMode === 'Screen') {
-                startScreenCapture()
-            } else if (gui_obj.captureMode === 'URL') {
-                getStream()
-            } else {
-                alert('Please select a capture mode')
-            }
+        viewMode: 'Capture',
+        roi: 'x1, y1, x2, y2',
+        inputMode: 'None',
+        testCMD: '',
+        captureROI: () => {
+            const timeStamp = getTimestamp()
+            const roiValue = guiObj.roi.split(',').map(v => Number(v.trim()))
+            const fileName = `${timeStamp}_capture_${roiValue.toString()}.jpg`
+            cap.saveFrame(roiValue[0], roiValue[1], roiValue[2], roiValue[3], fileName)
         },
-        connect: async function () {
-            if (gui_obj.inputMode === 'Serial') {
-                const recv_callback = data => {
-                    console.log('Received data:', data)
-                    btn_inputMode.hide()
-                    btn_input_start.hide()
-                    input_ready = true
-                }
-                serial.setReceiveHandler(recv_callback)
+        captureFrame: () => {
+            const timeStamp = getTimestamp()
+            const fileName = `${timeStamp}_capture.jpg`
+            cap.saveFrame(0, 0, cap.width, cap.height, fileName)
+        },
+        addImg: () => { addImg() },
+        addTxt: () => { addTxt() }
+    }
+
+
+    const captureSelect = folderCapture.add(guiObj, 'captureMode')
+        .name('Capture Mode')
+        .options(['Desktop', 'Streaming'])
+        .onChange((value) => {
+            if (value === 'Desktop') startCapture()
+            else if (value === 'Streaming') startStream()
+        })
+
+
+    const fpsSelect = folderCapture.add(guiObj, 'fps')
+        .name('FPS')
+        .options([1, 2, 3, 5, 10])
+        .onChange((value) => {
+            console.log(value)
+        })
+
+
+    const resetROI = () => {
+        if (cap.onStream) {
+            roiInput.setValue(`0, 0, ${cap.width}, ${cap.height}`)
+        } else {
+            roiInput.setValue(`x1, y1, x2, y2`)
+        }
+    }
+
+
+    const viewSelect = folderCapture.add(guiObj, 'viewMode')
+        .name('View Mode')
+        .options(['Capture', 'ROI'])
+        .onChange((value) => {
+            if (value === 'ROI') {
+                roiInput.show()
+                captureROIBtn.show()
+                resetROI()
+            }
+            else {
+                cap.draw.clearRect(0, 0, cap.width, cap.height)
+                roiInput.hide()
+                captureROIBtn.hide()
+            }
+        })
+        .disable()
+
+
+    const roiInput = folderCapture.add(guiObj, 'roi')
+        .name('ROI')
+        .onFinishChange((value) => {
+            const roiValue = value.split(',').map(v => Number(v.trim()))
+            if (roiValue.some(v => Number.isNaN(v))) {
+                console.log('ROI parsing error. (NaN)')
+                resetROI()
+                return
+            }
+            if (roiValue.length != 4) {
+                console.log('ROI parsing error. (Length)')
+                resetROI()
+                return
+            }
+            if (roiValue[0] >= roiValue[2] || roiValue[1] >= roiValue[3]) {
+                console.log('ROI parsing error. (Value)')
+                resetROI()
+                return
+            }
+            cap.draw.clearRect(0, 0, cap.width, cap.height)
+            cap.draw.strokeStyle = '#0000FF'
+            cap.draw.strokeRect(roiValue[0], roiValue[1], roiValue[2] - roiValue[0], roiValue[3] - roiValue[1])
+        })
+        .hide()
+
+
+    const captureROIBtn = folderCapture.add(guiObj, 'captureROI').name('Capture ROI Frame').hide()
+
+    folderCapture.add(guiObj, 'captureFrame').name('Capture Frame')
+
+    const inputSelect = folderInput.add(guiObj, 'inputMode')
+        .name('Input Mode')
+        .options(['Serial', 'Server'])
+        .onChange(async (value) => {
+            if (value === 'Serial') {
                 await serial.connect()
-                if (serial.isConnected) {
-                    console.log('Serial connected')
-                    serial.send('check')
-                } else {
-                    console.log('Serial connection failed')
-                }
-            } else if (gui_obj.inputMode === 'URL') {
-                try {
-                    let url = gui_obj.inputURL
-                    url = url.endsWith('/') ? url : `${url}/`
-                    const res = await fetch(`${url}check`)
-                    const text = await res.text()
-                    if (text === 'ok') {
-                        console.log('Input URL is valid')
-                        localStorage.setItem('input_url', gui_obj.inputURL)
-                        btn_inputMode.hide()
-                        btn_input_start.hide()
-                        inputURL.hide()
-                        input_ready = true
-                    } else {
-                        console.warn('Input URL responded with unexpected text:', text)
-                    }
-                } catch (err) {
-                    console.error('Failed to fetch input URL:', err)
-                }
+                if (serial.isConnected) inputSelect.disable()
+            } else if (value === 'Server') {
+                inputURL = prompt('Input URL : ', inputURL)
+                localStorage.setItem('inputURL', inputURL)
             }
-        },
-        capture: function () {
-            captureVideoFrame()
-        },
-        add_img: function () {
-            add_img()
-        },
-        add_txt: function () {
-            add_txt()
+        })
+
+
+    const inputTest = folderInput.add(guiObj, 'testCMD')
+        .name('Test Command')
+        .onFinishChange((value) => {
+            inputTest.setValue('')
+            send_key(value)
+        })
+
+
+    const addImgBtn = folderSlot.add(guiObj, 'addImg').name('Add Images. (0)')
+    const addTxtBtn = folderSlot.add(guiObj, 'addTxt').name('Add Slot Files. (0)')
+
+
+
+    const send_key = async (keys) => {
+        if (guiObj.inputMode === 'Serial' && serial.isConnected) {
+            serial.send(keys)
+            console.log(`Serial send : ${keys}`)
+        } else if (guiObj.inputMode === 'Server') {
+            let url = inputURL
+            url = url.endsWith('/') ? url : `${url}/`
+            url += keys
+            fetch(url)
+            console.log(`Server send : ${url}`)
+        } else {
+            console.log(`Not connected. ${keys}`)
         }
     }
 
-    const btn_captureMode = gui.add(gui_obj, 'captureMode').options(['Screen', 'Camera', 'URL']).name('Capture Mode').onChange((value) => {
-        if (gui_obj.captureMode === 'URL') {
-            streamURL.setValue('')
-            streamURL.setValue(stream_url)
-            streamURL.show()
-        } else {
-            streamURL.hide()
-        }
-    })
-    const streamURL = gui.add(gui_obj, 'streamURL').name('Stream URL').hide()
-    const btn_start = gui.add(gui_obj, 'start').name('Start Capture')
 
-    const btn_inputMode = gui.add(gui_obj, 'inputMode').options(['Serial', 'URL']).name('Input Mode').onChange((value) => {
-        if (gui_obj.inputMode === 'URL') {
-            inputURL.setValue('')
-            inputURL.setValue(input_url)
-            inputURL.show()
-        } else {
-            inputURL.hide()
-        }
-    })
-    const inputURL = gui.add(gui_obj, 'inputURL').name('Input URL').hide()
-    const btn_input_start = gui.add(gui_obj, 'connect').name('Connect Input')
-
-    const btn_fps = gui.add(gui_obj, 'fps').options([1, 2, 3, 5, 10]).name('Frame Rate').onChange(value => {
-        console.log('FPS set to:', value)
-        frameRate(value)
-    })
-    gui.add(gui_obj, 'capture').name('Capture Image')
-
-    const btn_add_img = gui.add(gui_obj, 'add_img').name('Add Image (0)').disable()
-    const btn_add_txt = gui.add(gui_obj, 'add_txt').name('Add Slot (0)')
-
-    function hide_capture_ui() {
-        btn_start.hide()
-        btn_captureMode.hide()
-        streamURL.hide()
+    const moveGUI = (x, y, width) => {
+        gui.domElement.style.position = 'fixed'
+        gui.domElement.style.width = `${width}px`
+        gui.domElement.style.top = `${y}px`
+        gui.domElement.style.left = `${x}px`
+        gui.domElement.style.right = 'auto'
     }
 
-    function add_img() {
+
+    const adjustCap = () => {
+        const ratio = cap.width / target_width
+        cap.apply()
+        cap.setSize(cap.width / ratio, cap.height / ratio)
+        cap.setPosition(0, 0)
+        moveGUI(0, (cap.height / ratio) + 5, target_width)
+        captureSelect.disable()
+        viewSelect.enable()
+        roiInput.setValue(`0, 0, ${cap.width}, ${cap.height}`)
+    }
+
+
+    const startCapture = () => {
+        cap.fromCapture().then(() => {
+            adjustCap()
+        })
+    }
+
+
+    const startStream = () => {
+        const url = prompt('Stream URL : ', streamURL)
+        cap.fromURL(url).then(() => {
+            adjustCap()
+            localStorage.setItem('streamURL', url)
+        })
+    }
+
+
+    const cvLoaded = () => {
+        cv.onRuntimeInitialized = () => {
+            console.log('opencv.js loaded.')
+            console.log('Start Loop.')
+            loop()
+        }
+    }
+
+
+    function addImg() {
         const input = document.createElement('input')
         input.type = 'file'
         input.accept = 'image/*'
@@ -166,38 +237,31 @@
             const files = Array.from(e.target.files)
             console.log('Selected files:', files.length)
             if (files.length === 0) return
-
             const tasks = files.map(file => {
                 return new Promise(resolve => {
                     const name = file.name
                     const key = name.split('.')[0]
-
                     // 🔴 중복 체크 (continue 느낌)
                     if (img_obj[key]) {
                         console.warn('이미 존재:', key)
                         resolve()
                         return
                     }
-
                     const url = URL.createObjectURL(file)
                     img_obj[key] = url
                     console.log('Image added:', name)
 
                     const img = new Image()
                     img.src = url
-
                     img.onload = () => {
                         try {
                             const src = cv.imread(img)
                             const gray = new cv.Mat()
-
                             cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
-
                             // 기존 Mat 정리
                             if (img_mat_obj[key]) {
                                 img_mat_obj[key].delete()
                             }
-
                             img_mat_obj[key] = gray.clone()
                             console.log('Mat created:', key)
 
@@ -207,27 +271,22 @@
                         } catch (err) {
                             console.error('OpenCV 처리 실패:', key, err)
                         }
-
                         resolve()
                     }
-
                     img.onerror = err => {
                         console.error('이미지 로드 실패:', key, err)
                         resolve()
                     }
                 })
             })
-
-            // 👇 모든 이미지 처리 완료 후 UI 업데이트
             await Promise.all(tasks)
-
-            btn_add_img.name(`Add Image (${Object.keys(img_obj).length})`)
+            addImgBtn.name(`Add Images. (${Object.keys(img_obj).length})`)
         }
-
         input.click()
     }
 
-    const validate_slot = data => {
+
+    const validateSlot = data => {
         // 공통 체크 (0 허용하도록 수정)
         if (!data.type || !data.key || data.cooltime === undefined) return false
 
@@ -259,20 +318,18 @@
                 isNum(data.threshold)
             )
         }
-
         return false
     }
 
-    function add_txt() {
+
+    function addTxt() {
         const input = document.createElement('input')
         input.type = 'file'
         input.accept = '.txt'
         input.multiple = true
-
         input.onchange = async e => {
             const files = Array.from(e.target.files)
             if (files.length === 0) return
-
             // 모든 파일을 Promise로 처리
             const tasks = files.map(file => {
                 return new Promise(resolve => {
@@ -284,7 +341,7 @@
                             return
                         }
                         // Add gui
-                        gui_obj[name] = false
+                        guiObj[name] = false
 
                         const text = event.target.result
                         const lines = text.split('\n')
@@ -293,9 +350,12 @@
                             const [key, value] = line.split(':').map(v => v.trim())
                             if (!key || !value) return
                             if (key === 'img') {
+                                data.scale = typeof(data.scale) == 'undefined' ? 0.5 : Number(data.scale)
+                                data.result = { value: 0, cx: 0, cy: 0, bool: false }
                                 const imgs = value.split(' ').map(v => v.trim().toLowerCase())
                                 if (!data.img) data.img = []
                                 data.img.push(...imgs)
+                                data.mats = data.img.map(v => img_mat_obj[v.split('.')[0]])
                             } else {
                                 data[key] = value
                             }
@@ -307,15 +367,9 @@
                         if (data.x2) data.x2 = Number(data.x2)
                         if (data.y1) data.y1 = Number(data.y1)
                         if (data.y2) data.y2 = Number(data.y2)
-                        if (typeof (data.scale) == 'undefined') {
-                            data.scale = 1
-                        } else {
-                            data.scale = Number(data.scale)
-                        }
                         data.cooling = false
                         data.run = false
-                        data.result = { value: 0, cx: 0, cy: 0, bool: false }
-                        if (validate_slot(data)) {
+                        if (validateSlot(data)) {
                             slots[name] = data
                         } else {
                             console.warn('Invalid slot data:', name, data)
@@ -325,14 +379,25 @@
                     reader.readAsText(file)
                 })
             })
+
             await Promise.all(tasks)
-            btn_add_txt.name(`Add Slot (${Object.keys(slots).length})`)
+
+            addTxtBtn.name(`Add Slot Files. (${Object.keys(slots).length})`)
+
             Object.keys(slots).forEach(key => {
-                if (gui.controllers.find(c => c.property === key) === undefined) {
+                if (folderSlot.controllers.find(c => c.property === key) === undefined) {
                     console.log(`Slot: ${key}, Type: ${slots[key].type}, Cooltime: ${slots[key].cooltime}s`)
-                    gui.add(gui_obj, key).name(key).onChange(value => {
+                    folderSlot.add(guiObj, key).name(key).onChange(value => {
                         slots[key].run = value
                     })
+                    // Add View Mode Select
+                    const opt = ['Capture', 'ROI']
+                    Object.keys(slots).forEach(key => {
+                        if (slots[key]['type'] == 'img') {
+                            opt.push(key)
+                        }
+                    })
+                    viewSelect.options(opt)
                 } else {
                     console.log(`${key} already exist.`)
                 }
@@ -341,68 +406,8 @@
         input.click()
     }
 
-    async function startScreenCapture() {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true })
-        myVideo = createVideo()
-        myVideo.elt.srcObject = stream
-        myVideo.elt.play()
-        myVideo.hide()
-        while (myVideo.elt.videoWidth === 0) {
-            await new Promise(resolve => setTimeout(resolve, 200))
-            console.log('Waiting for video to load...')
-        }
-        console.log(`Video size: ${myVideo.elt.videoWidth}x${myVideo.elt.videoHeight}`)
-        const ratio = Number(myVideo.elt.videoWidth / cnv_width)
-        cnv.resize(myVideo.elt.videoWidth / ratio, myVideo.elt.videoHeight / ratio)
-        console.log(`Canvas size: ${width}x${height}`)
-        gui.domElement.style.top = `${height + 10}px`
-        hide_capture_ui()
-        canvas.width = myVideo.elt.videoWidth
-        canvas.height = myVideo.elt.videoHeight
-    }
 
-    async function getCamera() {
-        myVideo = createCapture(VIDEO)
-        myVideo.hide()
-        while (myVideo.elt.videoWidth === 0) {
-            await new Promise(resolve => setTimeout(resolve, 200))
-            console.log('Waiting for video to load...')
-        }
-        console.log(`Video size: ${myVideo.elt.videoWidth}x${myVideo.elt.videoHeight}`)
-        const ratio = Number(myVideo.elt.videoWidth / cnv_width)
-        cnv.resize(myVideo.elt.videoWidth / ratio, myVideo.elt.videoHeight / ratio)
-        console.log(`Canvas size: ${width}x${height}`)
-        gui.domElement.style.top = `${height + 10}px`
-        hide_capture_ui()
-        canvas.width = myVideo.elt.videoWidth
-        canvas.height = myVideo.elt.videoHeight
-    }
-
-    async function getStream() {
-        myVideo = createImg(gui_obj.streamURL, 'stream')
-        myVideo.elt.crossOrigin = 'anonymous'
-        myVideo.hide()
-        let counter = 0
-        while (myVideo.elt.naturalWidth === 0 && counter < 10) {
-            await new Promise(resolve => setTimeout(resolve, 200))
-            console.log('Waiting for video to load...')
-            counter++
-        }
-        myVideo.elt.videoWidth = myVideo.elt.naturalWidth
-        myVideo.elt.videoHeight = myVideo.elt.naturalHeight
-        console.log(`Video size: ${myVideo.elt.videoWidth}x${myVideo.elt.videoHeight}`)
-        const ratio = Number(myVideo.elt.videoWidth / cnv_width)
-        cnv.resize(myVideo.elt.videoWidth / ratio, myVideo.elt.videoHeight / ratio)
-        console.log(`Canvas size: ${width}x${height}`)
-        gui.domElement.style.top = `${height + 10}px`
-        hide_capture_ui()
-        canvas.width = myVideo.elt.naturalWidth
-        canvas.height = myVideo.elt.naturalHeight
-        localStorage.setItem('stream_url', gui_obj.streamURL)
-    }
-
-
-    function getTimestamp() {
+    const getTimestamp = () => {
         let now = new Date()
         let YY = String(now.getFullYear()).slice(-2)
         let MM = String(now.getMonth() + 1).padStart(2, '0')
@@ -413,16 +418,6 @@
         return `${YY}${MM}${DD}${HH}${mm}${SS}`
     }
 
-
-    function captureVideoFrame() {
-        canvas.toBlob(blob => {
-            const a = document.createElement('a')
-            a.href = URL.createObjectURL(blob)
-            a.download = `capture_${getTimestamp()}.png`
-            a.click()
-            URL.revokeObjectURL(a.href)
-        }, 'image/png')
-    }
 
     const matchTemplate = (background, targets, scale = 1.0) => {
         if (!background || !targets || targets.length === 0) return null
@@ -457,9 +452,7 @@
 
         targets.forEach((target, idx) => {
             if (!target) return
-
             let tpl = target
-
             if (scale !== 1.0) {
                 const dsize = new cv.Size(
                     Math.floor(target.cols * scale),
@@ -469,40 +462,28 @@
                 cv.resize(target, resizedTpl, dsize, 0, 0, cv.INTER_AREA)
                 tpl = resizedTpl
             }
-
             if (gray.cols < tpl.cols || gray.rows < tpl.rows) {
                 if (tpl !== target) tpl.delete()
                 return
             }
-
             const result = new cv.Mat()
             cv.matchTemplate(gray, tpl, result, cv.TM_CCOEFF_NORMED)
-
             const minMax = cv.minMaxLoc(result)
-
             if (minMax.maxVal > score) {
                 score = minMax.maxVal
-
                 x = Math.floor(minMax.maxLoc.x / scale)
                 y = Math.floor(minMax.maxLoc.y / scale)
-
-                // 🔥 원본 기준 크기
                 w = target.cols
                 h = target.rows
-
                 targetIndex = idx
             }
-
             result.delete()
             if (tpl !== target) tpl.delete()
         })
-
         const endTime = performance.now()
-
         src.delete()
         gray.delete()
 
-        // 🔥 중심 좌표
         let cx = null
         let cy = null
 
@@ -513,99 +494,89 @@
         return { score, x, y, w, h, cx, cy, targetIndex, time: endTime - startTime }
     }
 
-    function send_key(key) {
-        if (input_ready) {
-            // console.log('Send key:', key)
-            if (gui_obj.inputMode === 'Serial') {
-                serial.send(key)
-            } else if (gui_obj.inputMode === 'URL') {
-                let url = gui_obj.inputURL
-                url = url.endsWith('/') ? url : `${url}/`
-                fetch(`${url}${key}`)
-            }
-        } else {
-            console.warn('Input not ready, cannot send key:', key)
-        }
-    }
 
-
-    function setup() {
-        frameRate(10)
-        pixelDensity(1)
-        cnv = createCanvas(cnv_width, 180)
-        cnv.position(5, 5)
-        background(180)
-    }
-
-    function draw() {
-        if (myVideo) {
-            image(myVideo, 0, 0, width, height)
-            ctx.drawImage(myVideo.elt, 0, 0, canvas.width, canvas.height)
-        }
+    const loop = () => {
+        const start = performance.now()
 
         // Timer
         Object.keys(slots).forEach(name => {
             if (slots[name]['type'] == 'timer') {
                 if (slots[name]['run'] && !slots[name]['cooling']) {
-                    // console.log(`Timer ${name} is running`)
                     slots[name]['cooling'] = true
                     const cooltime = slots[name].cooltime
                     const key = slots[name].key
-                    setTimeout(() => {slots[name]['cooling'] = false}, cooltime * 1000)
+                    setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
                     send_key(key)
                 }
             }
         })
 
         // Image Matching
-        Object.keys(slots).forEach(name => {
-            if (slots[name]['type'] == 'img') {
-                const cooltime = slots[name].cooltime
-                const cooling = slots[name].cooling
-                let mats = []
-                slots[name].img.forEach(key => {
-                    mats.push(img_mat_obj[key.split('.')[0]])
-                })
-                const threshold = slots[name].threshold
-                const x1 = slots[name].x1
-                const x2 = slots[name].x2
-                const y1 = slots[name].y1
-                const y2 = slots[name].y2
-                const key = slots[name].key
-                const scale = slots[name].scale
+        if (cap.onStream) {
+            const canvas = cap.getCanvas()
+            Object.keys(slots).forEach(name => {
+                if (slots[name]['type'] == 'img') {
+                    const cooltime = slots[name].cooltime
+                    const cooling = slots[name].cooling
+                    const threshold = slots[name].threshold
+                    const x1 = slots[name].x1
+                    const x2 = slots[name].x2
+                    const y1 = slots[name].y1
+                    const y2 = slots[name].y2
+                    const key = slots[name].key
+                    const scale = slots[name].scale
+                    const mats = slots[name].mats
 
-                const w = x2 - x1
-                const h = y2 - y1
-                canvasCrop.width = w
-                canvasCrop.height = h
-                ctxCrop.drawImage(canvas, x1, y1, w, h, 0, 0, w, h)
+                    const w = x2 - x1
+                    const h = y2 - y1
+                    canvasCrop.width = w
+                    canvasCrop.height = h
+                    ctxCrop.drawImage(canvas, x1, y1, w, h, 0, 0, w, h)
 
-                const match = matchTemplate(canvasCrop, mats, scale)
-                slots[name].result.value = match.score
-                slots[name].result.bool = match.score >= threshold
-                slots[name].result.cx = match.score >= threshold ? match.cx + x1 : 0
-                slots[name].result.cy = match.score >= threshold ? match.cy + y1 : 0
+                    const match = matchTemplate(canvasCrop, mats, scale)
+                    slots[name].result.value = match.score
+                    slots[name].result.bool = match.score >= threshold
+                    slots[name].result.cx = match.score >= threshold ? match.cx + x1 : 0
+                    slots[name].result.cy = match.score >= threshold ? match.cy + y1 : 0
 
-                gui.controllers.find( c => c.property === name).name(`${name} [${match.score.toFixed(2)}] (${slots[name]['result'].cx}, ${slots[name]['result'].cy})`)
+                    folderSlot.controllers.find(c => c.property === name).name(`${name} [${match.score.toFixed(2)}] (${slots[name]['result'].cx}, ${slots[name]['result'].cy})`)
 
-                if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']['bool']) {
-                    // console.log(`Image matching ${name} is running`)
-                    slots[name]['cooling'] = true
-                    setTimeout(() => {slots[name]['cooling'] = false}, cooltime * 1000)
-                    send_key(key)
+                    if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']['bool']) {
+                        // console.log(`Image matching ${name} is running`)
+                        slots[name]['cooling'] = true
+                        setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
+                        send_key(key)
+                    }
+
+                    // ROI and Result draw
+                    if (viewSelect.getValue() === name) {
+                        cap.draw.clearRect(0, 0, cap.width, cap.height)
+                        cap.draw.strokeStyle = '#0000FF'
+                        cap.draw.strokeRect(x1, y1, w, h)
+                        cap.draw.strokeStyle = '#00FF00'
+                        cap.draw.strokeRect(x1 + match.x, y1 + match.y, match.w, match.h)
+                    }
                 }
-            }
-        })
+            })
+        }
+
+
+
+        const elapsed = performance.now() - start
+        const delay = Math.max(0, (1000 / guiObj.fps) - elapsed)
+        setTimeout(loop, delay)
     }
+
 
     window.onload = () => {
         console.log('Window.onload.')
-        input_url = localStorage.getItem('input_url') || ''
-        stream_url = localStorage.getItem('stream_url') || ''
-        console.log('Loaded URLs:', { input_url, stream_url })
-        gui_obj.inputURL = input_url
-        gui_obj.streamURL = stream_url
+        inputURL = localStorage.getItem('inputURL') || ''
+        streamURL = localStorage.getItem('streamURL') || ''
+        console.log('Loaded URLs:', { inputURL, streamURL })
+        moveGUI(0, 0, target_width)
     }
+
+
 </script>
 
 </html>

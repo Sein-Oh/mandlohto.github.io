@@ -1,179 +1,133 @@
 class Capture {
-    constructor(canvas, options = {}) {
-        this.canvas = canvas
-        this.ctx = canvas.getContext('2d')
+    constructor() {
+        this.canvas = document.createElement('canvas')
+        this.ctx = this.canvas.getContext('2d')
 
-        this.video = document.createElement('video')
-        this.video.autoplay = true
-        this.video.playsInline = true
+        this.canvas_pad = document.createElement('canvas')
+        this.draw = this.canvas_pad.getContext('2d')
 
-        this.img = new Image()
-
-        this.source = null
-        this.stream = null
-
-        this.fps = options.fps || 5
-        this._interval = 1000 / this.fps
-        this._lastTime = 0
-        this._running = false
-
-        this._imgLoaded = false
+        this.element = null
+        this.width = null
+        this.height = null
+        this.onStream = false
     }
 
-    /* =========================
-        PUBLIC API
-    ========================= */
-
-    setFPS(fps) {
-        this.fps = fps
-        this._interval = 1000 / fps
-    }
-
-    async startDesktop() {
-        await this._switchSource(async () => {
-            this.stream = await navigator.mediaDevices.getDisplayMedia({
-                video: { cursor: 'always' },
-                audio: false
-            })
-
-            this.video.srcObject = this.stream
-
-            await this._waitVideoReady()
-            this.source = 'video'
-        })
-    }
-
-    async startWebcam(facingMode = 'user') {
-        await this._switchSource(async () => {
-            this.stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode },
-                audio: false
-            })
-
-            this.video.srcObject = this.stream
-
-            await this._waitVideoReady()
-            this.source = 'video'
-        })
-    }
-
-    async startStream(url) {
-        await this._switchSource(async () => {
-            this._imgLoaded = false
-
-            await new Promise((resolve, reject) => {
-                this.img.onload = () => {
-                    this._imgLoaded = true
-                    resolve()
-                }
-
-                this.img.onerror = (e) => {
-                    reject(e)
-                }
-
-                this.img.src = url
-            })
-
-            this.source = 'img'
-        })
-    }
-
-    stop() {
-        this._running = false
-
-        if (this.stream) {
-            this.stream.getTracks().forEach(track => track.stop())
-            this.stream = null
-        }
-
-        this.video.srcObject = null
-        this.img.src = ''
-        this.source = null
-    }
-
-    getSourceSize() {
-        if (this.source === 'video') {
-            return {
-                width: this.video.videoWidth,
-                height: this.video.videoHeight
+    fromURL(url) {
+        return new Promise((resolve, reject) => {
+            if (this.onStream) {
+                alert('Stream already running.')
+                reject(new Error('Stream already running.'))
+                return
             }
-        }
+            this.img = new Image()
+            this.img.crossOrigin = 'anonymous'
+            this.img.style.position = 'absolute'
+            this.img.onload = () => {
+                this.onStream = true
+                this.element = this.img
 
-        if (this.source === 'img') {
-            return {
-                width: this.img.naturalWidth,
-                height: this.img.naturalHeight
-            }
-        }
+                this.width = this.img.naturalWidth
+                this.canvas.width = this.img.naturalWidth
+                this.canvas_pad.width = this.img.naturalWidth
 
-        return null
-    }
+                this.height = this.img.naturalHeight
+                this.canvas.height = this.img.naturalHeight
+                this.canvas_pad.height = this.img.naturalHeight
 
-    /* =========================
-        INTERNAL
-    ========================= */
-
-    async _switchSource(initFn) {
-        this.stop()
-
-        await initFn()
-
-        this._startLoop()
-    }
-
-    _startLoop() {
-        if (this._running) return
-        this._running = true
-        this._lastTime = 0
-        requestAnimationFrame(this._loop.bind(this))
-    }
-
-    _loop(now) {
-        if (!this._running) return
-
-        const delta = now - this._lastTime
-
-        if (delta >= this._interval) {
-            this._lastTime = now
-            this._draw()
-        }
-
-        requestAnimationFrame(this._loop.bind(this))
-    }
-
-    _draw() {
-        if (this.source === 'video') {
-            if (this.video.readyState >= 2) {
-                this.ctx.drawImage(
-                    this.video,
-                    0, 0,
-                    this.canvas.width,
-                    this.canvas.height
-                )
-            }
-        }
-
-        if (this.source === 'img' && this._imgLoaded) {
-            this.ctx.drawImage(
-                this.img,
-                0, 0,
-                this.canvas.width,
-                this.canvas.height
-            )
-        }
-    }
-
-    _waitVideoReady() {
-        return new Promise(resolve => {
-            this.video.onloadedmetadata = () => {
                 resolve()
             }
+            this.img.src = url
         })
     }
 
-    getSourceElement() {
-        if (this.source === 'video') return this.video
-        if (this.source === 'img') return this.img
-        return null
+    fromCapture() {
+        return new Promise((resolve, reject) => {
+            if (this.onStream) {
+                alert('Stream already running.')
+                reject(new Error('Stream already running.'))
+                return
+            }
+            this.video = document.createElement('video')
+            this.video.autoplay = true
+            this.video.playsInline = true
+            this.video.onloadedmetadata = () => {
+                this.onStream = true
+                this.element = this.video
+
+                this.width = this.video.videoWidth
+                this.height = this.video.videoHeight
+
+                this.canvas.width = this.video.videoWidth
+                this.canvas.height = this.video.videoHeight
+
+                this.canvas_pad.width = this.video.videoWidth
+                this.canvas_pad.height = this.video.videoHeight
+                resolve()
+            }
+            navigator.mediaDevices.getDisplayMedia().then(mediaStream => {
+                this.video.srcObject = mediaStream
+                this.video.play()
+            })
+        })
+    }
+
+    getDataURL() {
+        this.ctx.drawImage(this.element, 0, 0)
+        return this.canvas.toDataURL('image/webp')
+    }
+
+    getCanvas() {
+        this.ctx.drawImage(this.element, 0, 0)
+        return this.canvas
+    }
+
+    update() {
+        this.ctx.drawImage(this.element, 0, 0)
+    }
+
+    setSize(width, height) {
+        this.element.style.width = `${width}px`
+        this.element.style.height = `${height}px`
+        this.canvas_pad.style.width = `${width}px`
+        this.canvas_pad.style.height = `${height}px`
+    }
+
+    setPosition(x, y) {
+        this.element.style.left = this.canvas_pad.style.left = `${x}px`
+        this.element.style.top = this.canvas_pad.style.top = `${y}px`
+    }
+
+    apply() {
+        document.body.appendChild(this.element)
+        document.body.appendChild(this.canvas_pad)
+        this.element.style.position = 'absolute'
+        // this.element.style.borderRadius = '5px'
+        this.canvas_pad.style.position = 'absolute'
+        this.canvas_pad.style.zIndex = 99
+        this.draw.strokeStyle = '#00FF00'
+        this.draw.lineWidth = 16
+    }
+
+    saveFrame(x1, y1, x2, y2, fileName = 'capture.jpg') {
+        this.ctx.drawImage(this.element, 0, 0)
+        const width = x2 - x1
+        const height = y2 - y1
+
+        const cropCanvas = document.createElement('canvas')
+        cropCanvas.width = width
+        cropCanvas.height = height
+
+        const cropCtx = cropCanvas.getContext('2d')
+
+        cropCtx.drawImage(this.canvas, x1, y1, width, height, 0, 0, width, height)
+
+        // 파일 저장
+        cropCanvas.toBlob(blob => {
+            const a = document.createElement('a')
+            a.href = URL.createObjectURL(blob)
+            a.download = fileName
+            a.click()
+            URL.revokeObjectURL(a.href)
+        }, 'image/jpeg')
     }
 }

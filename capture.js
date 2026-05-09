@@ -109,6 +109,7 @@ class Capture {
     }
 
     saveFrame(x1, y1, x2, y2, fileName = 'capture.jpg') {
+        if (!this.onStream) return
         this.ctx.drawImage(this.element, 0, 0)
         const width = x2 - x1
         const height = y2 - y1

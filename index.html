@@ -174,7 +174,8 @@
             serial.send(key)
             console.log(`Serial send : ${key}`)
         } else if (guiObj.inputMode === 'Server') {
-            const url = `${inputURL.endsWith('/') ? inputURL : inputURL + '/'}${key}`
+            // const url = `${inputURL.endsWith('/') ? inputURL : inputURL + '/'}${key}`
+            const url = `${inputURL.endsWith('/') || inputURL.endsWith('=') ? inputURL : inputURL + '/'}${key}`
             fetch(url)
             console.log(`Server send : ${url}`)
         } else {

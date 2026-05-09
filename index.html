@@ -3,7 +3,7 @@
 
 <head>
     <meta charset='UTF-8'>
-    <title>만들오토 v1.3 (2026.05.09)</title>
+    <title>만들오토 v1.4 (2026.05.09)</title>
     <script src='https://cdn.jsdelivr.net/npm/lil-gui@0.21'></script>
     <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
     <script src='capture.js'></script>
@@ -36,6 +36,7 @@
 
 
     const gui = new lil.GUI({ title: 'Mandlauto' })
+    const folderPos = gui.addFolder('GUI Position').close()
     const folderCapture = gui.addFolder('Capture')
     const folderInput = gui.addFolder('Input')
     const folderSlot = gui.addFolder('Slot')
@@ -48,6 +49,16 @@
         roi: 'x1, y1, x2, y2',
         inputMode: 'None',
         testCMD: '',
+        guiToTop: () => {
+            moveGUI(0, 0, target_width)
+        },
+        guiToBottom: () => {
+            const ratio = cap.width / target_width
+            moveGUI(0, (cap.height / ratio) + 5, target_width)
+        },
+        guiToTopRight: () => {
+            moveGUI(target_width + 5, 0, target_width)
+        },
         captureROI: () => {
             const roiValue = guiObj.roi.split(',').map(v => Number(v.trim()))
             const fileName = `${getTimestamp()}_capture_${roiValue.toString()}.jpg`
@@ -160,6 +171,11 @@
 
     const addImgBtn = folderSlot.add(guiObj, 'addImg').name('Add Images. (0)')
     const addTxtBtn = folderSlot.add(guiObj, 'addTxt').name('Add Slot Files. (0)')
+
+    folderPos.add(guiObj, 'guiToTop').name('Top')
+    folderPos.add(guiObj, 'guiToTopRight').name('Top Right')
+    folderPos.add(guiObj, 'guiToBottom').name('Bottom')
+
 
 
     const wait = msec => {

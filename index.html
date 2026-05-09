@@ -154,9 +154,9 @@
 
     const inputTest = folderInput.add(guiObj, 'testCMD')
         .name('Test Command')
-        .onFinishChange((value) => {
+        .onFinishChange(async (value) => {
             inputTest.setValue('')
-            send_key(value)
+            await send_keys(value)
         })
 
 
@@ -164,19 +164,21 @@
     const addTxtBtn = folderSlot.add(guiObj, 'addTxt').name('Add Slot Files. (0)')
 
 
+    const wait = msec => {
+        return new Promise(resolve => {
+            setTimeout(resolve, msec)
+        })
+    }
 
-    const send_key = async (keys) => {
-        if (guiObj.inputMode === 'Serial' && serial.isConnected) {
-            serial.send(keys)
-            console.log(`Serial send : ${keys}`)
-        } else if (guiObj.inputMode === 'Server') {
-            let url = inputURL
-            url = url.endsWith('/') ? url : `${url}/`
-            url += keys
-            fetch(url)
-            console.log(`Server send : ${url}`)
-        } else {
-            console.log(`Not connected. ${keys}`)
+
+    const send_keys = async keys => {
+        for (const key of keys.split(' ')) {
+            if (key.indexOf('-') === 0) {
+                const argument = Number(key.slice(1))
+                await wait(argument * 1000)
+            } else {
+                console.log(key)
+            }
         }
     }
 
@@ -350,7 +352,7 @@
                             const [key, value] = line.split(':').map(v => v.trim())
                             if (!key || !value) return
                             if (key === 'img') {
-                                data.scale = typeof(data.scale) == 'undefined' ? 0.5 : Number(data.scale)
+                                data.scale = typeof (data.scale) == 'undefined' ? 0.5 : Number(data.scale)
                                 data.result = { value: 0, cx: 0, cy: 0, bool: false }
                                 const imgs = value.split(' ').map(v => v.trim().toLowerCase())
                                 if (!data.img) data.img = []
@@ -495,26 +497,26 @@
     }
 
 
-    const loop = () => {
+    const loop = async () => {
         const start = performance.now()
 
         // Timer
-        Object.keys(slots).forEach(name => {
+        for (const name of Object.keys(slots)) {
             if (slots[name]['type'] == 'timer') {
                 if (slots[name]['run'] && !slots[name]['cooling']) {
                     slots[name]['cooling'] = true
                     const cooltime = slots[name].cooltime
                     const key = slots[name].key
                     setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
-                    send_key(key)
+                    await send_keys(key)
                 }
             }
-        })
+        }
 
         // Image Matching
         if (cap.onStream) {
             const canvas = cap.getCanvas()
-            Object.keys(slots).forEach(name => {
+            for (const name of Object.keys(slots)) {
                 if (slots[name]['type'] == 'img') {
                     const cooltime = slots[name].cooltime
                     const cooling = slots[name].cooling
@@ -542,10 +544,9 @@
                     folderSlot.controllers.find(c => c.property === name).name(`${name} [${match.score.toFixed(2)}] (${slots[name]['result'].cx}, ${slots[name]['result'].cy})`)
 
                     if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']['bool']) {
-                        // console.log(`Image matching ${name} is running`)
                         slots[name]['cooling'] = true
                         setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
-                        send_key(key)
+                        await send_keys(key)
                     }
 
                     // ROI and Result draw
@@ -557,10 +558,8 @@
                         cap.draw.strokeRect(x1 + match.x, y1 + match.y, match.w, match.h)
                     }
                 }
-            })
+            }
         }
-
-
 
         const elapsed = performance.now() - start
         const delay = Math.max(0, (1000 / guiObj.fps) - elapsed)

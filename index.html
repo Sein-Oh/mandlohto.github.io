@@ -3,7 +3,7 @@
 
 <head>
     <meta charset='UTF-8'>
-    <title>만들오토 v1.3 (2026.05.08)</title>
+    <title>만들오토 v1.3 (2026.05.09)</title>
     <script src='https://cdn.jsdelivr.net/npm/lil-gui@0.21'></script>
     <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
     <script src='capture.js'></script>
@@ -49,14 +49,12 @@
         inputMode: 'None',
         testCMD: '',
         captureROI: () => {
-            const timeStamp = getTimestamp()
             const roiValue = guiObj.roi.split(',').map(v => Number(v.trim()))
-            const fileName = `${timeStamp}_capture_${roiValue.toString()}.jpg`
+            const fileName = `${getTimestamp()}_capture_${roiValue.toString()}.jpg`
             cap.saveFrame(roiValue[0], roiValue[1], roiValue[2], roiValue[3], fileName)
         },
         captureFrame: () => {
-            const timeStamp = getTimestamp()
-            const fileName = `${timeStamp}_capture.jpg`
+            const fileName = `${getTimestamp()}_capture.jpg`
             cap.saveFrame(0, 0, cap.width, cap.height, fileName)
         },
         addImg: () => { addImg() },
@@ -171,13 +169,46 @@
     }
 
 
-    const send_keys = async keys => {
+    const writeKey = (key) => {
+        if (guiObj.inputMode === 'Serial' && serial.isConnected) {
+            serial.send(key)
+            console.log(`Serial send : ${key}`)
+        } else if (guiObj.inputMode === 'Server') {
+            const url = `${inputURL.endsWith('/') ? inputURL : inputURL + '/'}${key}`
+            fetch(url)
+            console.log(`Server send : ${url}`)
+        } else {
+            console.log(`Not connected. ${key}`)
+        }
+    }
+
+
+    const send_keys = async (keys, type = 'none', name = 'none') => {
         for (const key of keys.split(' ')) {
             if (key.indexOf('-') === 0) {
                 const argument = Number(key.slice(1))
                 await wait(argument * 1000)
+            } else if (key.indexOf('@') === 0) {
+                //Magic key
+                const argument = key.slice(1)
+                if (argument.includes('click@') && type === 'img' && name != 'none') {
+                    const idx = argument.indexOf('@')
+                    const argu = Number(argument.slice(idx + 1))
+                    const result = slots[name].result
+                    const magicKey = `${Math.round(result.cx * argu)},${Math.round(result.cy * argu)}`
+                    writeKey(magicKey)
+                } else {
+                    if (argument === 'capture') {
+                        const fileName = `${getTimestamp()}_capture.jpg`
+                        cap.saveFrame(0, 0, cap.width, cap.height, fileName)
+                    } else if (argument === 'click' && type === 'img' && name != 'none') {
+                        const result = slots[name].result
+                        const magicKey = `${result.cx},${result.cy}`
+                        writeKey(magicKey)
+                    }
+                }
             } else {
-                console.log(key)
+                writeKey(key)
             }
         }
     }
@@ -538,15 +569,15 @@
                     const match = matchTemplate(canvasCrop, mats, scale)
                     slots[name].result.value = match.score
                     slots[name].result.bool = match.score >= threshold
-                    slots[name].result.cx = match.score >= threshold ? match.cx + x1 : 0
-                    slots[name].result.cy = match.score >= threshold ? match.cy + y1 : 0
+                    slots[name].result.cx = match.cx + x1
+                    slots[name].result.cy = match.cy + y1
 
                     folderSlot.controllers.find(c => c.property === name).name(`${name} [${match.score.toFixed(2)}] (${slots[name]['result'].cx}, ${slots[name]['result'].cy})`)
 
                     if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']['bool']) {
                         slots[name]['cooling'] = true
                         setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
-                        await send_keys(key)
+                        await send_keys(key, 'img', name)
                     }
 
                     // ROI and Result draw
@@ -554,7 +585,7 @@
                         cap.draw.clearRect(0, 0, cap.width, cap.height)
                         cap.draw.strokeStyle = '#0000FF'
                         cap.draw.strokeRect(x1, y1, w, h)
-                        cap.draw.strokeStyle = '#00FF00'
+                        cap.draw.strokeStyle = slots[name].result.bool ? '#00FF00' : '#FFFF00'
                         cap.draw.strokeRect(x1 + match.x, y1 + match.y, match.w, match.h)
                     }
                 }

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset='UTF-8'>
-    <title>만들오토 v1.4 (2026.05.09)</title>
+    <title>만들오토 v1.3 (2026.05.09)</title>
     <script src='https://cdn.jsdelivr.net/npm/lil-gui@0.21'></script>
     <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
     <script src='capture.js'></script>
@@ -25,14 +25,13 @@
     const ctxCrop = canvasCrop.getContext('2d', { willReadFrequently: true })
 
     const slots = {}
-    const img_obj = {}
-    const img_mat_obj = {}
+    const imgObj = {}
+    const imgMatObj = {}
 
 
     const target_width = 320
     const cap = new Capture()
     const serial = new WebSerialManager()
-
 
 
     const gui = new lil.GUI({ title: 'Mandlauto' })
@@ -190,7 +189,6 @@
             serial.send(key)
             console.log(`Serial send : ${key}`)
         } else if (guiObj.inputMode === 'Server') {
-            // const url = `${inputURL.endsWith('/') ? inputURL : inputURL + '/'}${key}`
             const url = `${inputURL.endsWith('/') || inputURL.endsWith('=') ? inputURL : inputURL + '/'}${key}`
             fetch(url)
             console.log(`Server send : ${url}`)
@@ -285,90 +283,30 @@
 
         input.onchange = async e => {
             const files = Array.from(e.target.files)
-            console.log('Selected files:', files.length)
-            if (files.length === 0) return
             const tasks = files.map(file => {
                 return new Promise(resolve => {
                     const name = file.name
                     const key = name.split('.')[0]
-                    // 🔴 중복 체크 (continue 느낌)
-                    if (img_obj[key]) {
-                        console.warn('이미 존재:', key)
-                        resolve()
-                        return
-                    }
                     const url = URL.createObjectURL(file)
-                    img_obj[key] = url
-                    console.log('Image added:', name)
-
+                    imgObj[key] = url
                     const img = new Image()
-                    img.src = url
                     img.onload = () => {
-                        try {
-                            const src = cv.imread(img)
-                            const gray = new cv.Mat()
-                            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
-                            // 기존 Mat 정리
-                            if (img_mat_obj[key]) {
-                                img_mat_obj[key].delete()
-                            }
-                            img_mat_obj[key] = gray.clone()
-                            console.log('Mat created:', key)
-
-                            // 메모리 해제
-                            src.delete()
-                            gray.delete()
-                        } catch (err) {
-                            console.error('OpenCV 처리 실패:', key, err)
-                        }
+                        const src = cv.imread(img)
+                        const gray = new cv.Mat()
+                        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+                        imgMatObj[key] = gray.clone()
+                        console.log('Mat created:', key)
+                        src.delete()
+                        gray.delete()
                         resolve()
                     }
-                    img.onerror = err => {
-                        console.error('이미지 로드 실패:', key, err)
-                        resolve()
-                    }
+                    img.src = url
                 })
             })
             await Promise.all(tasks)
-            addImgBtn.name(`Add Images. (${Object.keys(img_obj).length})`)
+            addImgBtn.name(`Add Images. (${Object.keys(imgObj).length})`)
         }
         input.click()
-    }
-
-
-    const validateSlot = data => {
-        // 공통 체크 (0 허용하도록 수정)
-        if (!data.type || !data.key || data.cooltime === undefined) return false
-
-        // 숫자 체크 헬퍼
-        const isNum = v => typeof v === 'number' && !isNaN(v)
-
-        if (data.type === 'timer') {
-            return (
-                typeof data.key === 'string' &&
-                isNum(data.cooltime)
-            )
-        }
-
-        if (data.type === 'img') {
-            // 🔴 img 배열 체크 + 모든 요소가 img_mat_obj에 존재해야 함
-            console.log(name)
-            const validImgs =
-                Array.isArray(data.img) &&
-                data.img.length > 0 &&
-                data.img.every(name => img_mat_obj[name.split('.')[0]])
-
-            return (
-                validImgs &&
-                isNum(data.cooltime) &&
-                isNum(data.x1) &&
-                isNum(data.y1) &&
-                isNum(data.x2) &&
-                isNum(data.y2) &&
-                isNum(data.threshold)
-            )
-        }
-        return false
     }
 
 
@@ -379,33 +317,29 @@
         input.multiple = true
         input.onchange = async e => {
             const files = Array.from(e.target.files)
-            if (files.length === 0) return
-            // 모든 파일을 Promise로 처리
             const tasks = files.map(file => {
                 return new Promise(resolve => {
                     const reader = new FileReader()
                     reader.onload = event => {
                         const name = file.name.replace('.txt', '')
-                        if (slots[name]) {
-                            resolve()
-                            return
-                        }
-                        // Add gui
+
+                        //For GUI checkbox.
                         guiObj[name] = false
 
                         const text = event.target.result
                         const lines = text.split('\n')
                         const data = {}
+                        data.cooling = false
+                        data.run = false
                         lines.forEach(line => {
                             const [key, value] = line.split(':').map(v => v.trim())
-                            if (!key || !value) return
                             if (key === 'img') {
+                                const imgs = value.split(' ').map(v => v.trim().toLowerCase())
+                                data.img = []
+                                data.img.push(...imgs)
+                                data.mats = data.img.map(v => imgMatObj[v.split('.')[0]])
                                 data.scale = typeof (data.scale) == 'undefined' ? 0.5 : Number(data.scale)
                                 data.result = { value: 0, cx: 0, cy: 0, bool: false }
-                                const imgs = value.split(' ').map(v => v.trim().toLowerCase())
-                                if (!data.img) data.img = []
-                                data.img.push(...imgs)
-                                data.mats = data.img.map(v => img_mat_obj[v.split('.')[0]])
                             } else {
                                 data[key] = value
                             }
@@ -417,13 +351,7 @@
                         if (data.x2) data.x2 = Number(data.x2)
                         if (data.y1) data.y1 = Number(data.y1)
                         if (data.y2) data.y2 = Number(data.y2)
-                        data.cooling = false
-                        data.run = false
-                        if (validateSlot(data)) {
-                            slots[name] = data
-                        } else {
-                            console.warn('Invalid slot data:', name, data)
-                        }
+                        slots[name] = data
                         resolve()
                     }
                     reader.readAsText(file)

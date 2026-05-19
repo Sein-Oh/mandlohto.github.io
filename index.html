@@ -3,7 +3,7 @@
 
 <head>
     <meta charset='UTF-8'>
-    <title>만들오토 v1.4 (2026.05.11)</title>
+    <title>만들오토 v1.5 (2026.05.19)</title>
     <script src='https://cdn.jsdelivr.net/npm/lil-gui@0.21'></script>
     <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
     <script src='capture.js'></script>
@@ -189,9 +189,15 @@
             serial.send(key)
             console.log(`Serial send : ${key}`)
         } else if (guiObj.inputMode === 'Server') {
-            const url = `${inputURL.endsWith('/') || inputURL.endsWith('=') ? inputURL : inputURL + '/'}${key}`
-            fetch(url)
-            console.log(`Server send : ${url}`)
+            if (key.includes(',')) {
+                const [x,y] = key.split(',').map(Number)
+                fetch(`${inputURL}?cmd=click&x=${x}&y=${y}`)
+            } else {
+                fetch(`${inputURL}?cmd=write&key=${key}`)
+            }
+            // const url = `${inputURL.endsWith('/') || inputURL.endsWith('=') ? inputURL : inputURL + '/'}${key}`
+            // fetch(url)
+            console.log(`Server send : ${key}`)
         } else {
             console.log(`Not connected. ${key}`)
         }

@@ -37,12 +37,6 @@ def hello():
 
 @app.route('/upload', methods=['POST'])
 def upload_image():
-"""
-cap.canvas.toBlob((blob) => {
-    const formData = new FormData()
-    formData.append('file', blob, 'cnv.png')
-    fetch(url, {method: 'POST', body: formData}).then(res => res.json()).then(data => console.log(data))}, 'image/png')
-"""
 
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
@@ -55,6 +49,13 @@ cap.canvas.toBlob((blob) => {
     # Save the file to a designated directory
     save_path = os.path.join('uploads', file.filename)
     file.save(save_path)
+
+    """
+    cap.canvas.toBlob((blob) => {
+        const formData = new FormData()
+        formData.append('file', blob, 'cnv.png')
+        fetch(url, {method: 'POST', body: formData}).then(res => res.json()).then(data => console.log(data))}, 'image/png')
+    """
     
     return jsonify({"message": "File uploaded successfully", "path": save_path}), 200    
 

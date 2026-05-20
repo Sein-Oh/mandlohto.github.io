@@ -3,7 +3,7 @@
 
 <head>
     <meta charset='UTF-8'>
-    <title>만들오토 v1.5 (2026.05.19)</title>
+    <title>만들오토 v1.5 (2026.05.20)</title>
     <script src='https://cdn.jsdelivr.net/npm/lil-gui@0.21'></script>
     <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
     <script src='capture.js'></script>
@@ -39,6 +39,7 @@
     const folderCapture = gui.addFolder('Capture')
     const folderInput = gui.addFolder('Input')
     const folderSlot = gui.addFolder('Slot')
+    const folderTool = gui.addFolder('Download Form').close()
 
 
     const guiObj = {
@@ -68,7 +69,19 @@
             cap.saveFrame(0, 0, cap.width, cap.height, fileName)
         },
         addImg: () => { addImg() },
-        addTxt: () => { addTxt() }
+        addTxt: () => { addTxt() },
+        formTimer: () => {
+            const text = `type: timer\nkey : \ncooltime :`
+            downloadTextFile('Form_Timer', text)
+        },
+        formImg: () => {
+            const text = `type : img\nkey : \nimg : \ncooltime : \nx1 :\ny1 :\nx2 :\ny2 : \nthreshold : 0.8\nscale : 0.5`
+            downloadTextFile('Form_Image', text)
+        },
+        formScript: () => {
+            const text = `type : script\nkey : \nslots : \ncooltime : `
+            downloadTextFile('Form_Script', text)
+        }
     }
 
 
@@ -170,6 +183,11 @@
 
     const addImgBtn = folderSlot.add(guiObj, 'addImg').name('Add Images. (0)')
     const addTxtBtn = folderSlot.add(guiObj, 'addTxt').name('Add Slot Files. (0)')
+    const sampleTimerBtn = folderTool.add(guiObj, 'formTimer').name('Timer')
+    const sampleImgBtn = folderTool.add(guiObj, 'formImg').name('Image')
+    const sampleScriptBtn = folderTool.add(guiObj, 'formScript').name('Script')
+
+
 
     folderPos.add(guiObj, 'guiToTop').name('Top')
     folderPos.add(guiObj, 'guiToTopRight').name('Top Right')
@@ -190,7 +208,7 @@
             console.log(`Serial send : ${key}`)
         } else if (guiObj.inputMode === 'Server') {
             if (key.includes(',')) {
-                const [x,y] = key.split(',').map(Number)
+                const [x, y] = key.split(',').map(Number)
                 fetch(`${inputURL}?cmd=click&x=${x}&y=${y}`)
             } else {
                 fetch(`${inputURL}?cmd=write&key=${key}`)
@@ -466,6 +484,25 @@
     }
 
 
+    const downloadTextFile = (filename, content) => {
+        const blob = new Blob([content], {
+            type: 'text/plain;charset=utf-8'
+        })
+
+        const url = URL.createObjectURL(blob)
+
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+
+        document.body.appendChild(a)
+        a.click()
+
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+    }
+
+
     const matchTemplate = (background, targets, scale = 1.0) => {
         if (!background || !targets || targets.length === 0) return null
 
@@ -629,7 +666,7 @@
                 slots[name].result = result.every(v => v === true) ? true : false
                 let resultIcon = slots[name].result ? '🟢' : '🟡'
                 folderSlot.controllers.find(c => c.property === name).name(`${resultIcon} ${name} `)
-                
+
                 if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']) {
                     slots[name]['cooling'] = true
                     const cooltime = Number(slots[name].cooltime)

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset='UTF-8'>
-    <title>만들오토 v1.5 (2026.05.20)</title>
+    <title>만들오토 v1.5 (2026.05.25)</title>
     <script src='https://cdn.jsdelivr.net/npm/lil-gui@0.21'></script>
     <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
     <script src='capture.js'></script>
@@ -35,11 +35,16 @@
 
 
     const gui = new lil.GUI({ title: 'Mandlauto' })
-    const folderPos = gui.addFolder('GUI Position').close()
     const folderCapture = gui.addFolder('Capture')
     const folderInput = gui.addFolder('Input')
+
     const folderSlot = gui.addFolder('Slot')
-    const folderTool = gui.addFolder('Download Form').close()
+
+    const folderTool = gui.addFolder('Tools').close()
+    const folderPos = folderTool.addFolder('GUI Position').close()
+    const folderForm = folderTool.addFolder('Download Form').close()
+    const folderInfo = folderTool.addFolder('Information').close()
+
 
 
     const guiObj = {
@@ -49,6 +54,7 @@
         roi: 'x1, y1, x2, y2',
         inputMode: 'None',
         testCMD: '',
+        loopTime: 0,
         guiToTop: () => {
             moveGUI(0, 0, target_width)
         },
@@ -81,6 +87,10 @@
         formScript: () => {
             const text = `type : script\nkey : \nslots : \ncooltime : `
             downloadTextFile('Form_Script', text)
+        },
+        formRequestInfo: () => {
+            const text = `type : requestInfo\nurl : \ncooltime : `
+            downloadTextFile('Form_RequestInfo', text)
         }
     }
 
@@ -183,16 +193,17 @@
 
     const addImgBtn = folderSlot.add(guiObj, 'addImg').name('Add Images. (0)')
     const addTxtBtn = folderSlot.add(guiObj, 'addTxt').name('Add Slot Files. (0)')
-    const sampleTimerBtn = folderTool.add(guiObj, 'formTimer').name('Timer')
-    const sampleImgBtn = folderTool.add(guiObj, 'formImg').name('Image')
-    const sampleScriptBtn = folderTool.add(guiObj, 'formScript').name('Script')
-
+    const sampleTimerBtn = folderForm.add(guiObj, 'formTimer').name('Timer')
+    const sampleImgBtn = folderForm.add(guiObj, 'formImg').name('Image')
+    const sampleScriptBtn = folderForm.add(guiObj, 'formScript').name('Script')
+    const sampleRequestInfoBtn = folderForm.add(guiObj, 'formRequestInfo').name('Request Information')
 
 
     folderPos.add(guiObj, 'guiToTop').name('Top')
     folderPos.add(guiObj, 'guiToTopRight').name('Top Right')
     folderPos.add(guiObj, 'guiToBottom').name('Bottom')
 
+    const loopTime = folderInfo.add(guiObj, 'loopTime').name('Loop Time (ms)')
 
 
     const wait = msec => {
@@ -333,7 +344,6 @@
         input.click()
     }
 
-
     function addTxt() {
         const input = document.createElement('input')
         input.type = 'file'
@@ -356,7 +366,12 @@
                         data.cooling = false
                         data.run = false
                         lines.forEach(line => {
-                            const [key, value] = line.split(':').map(v => v.trim())
+                            console.log(line)
+                            let [key, value] = line.split(':').map(v => v.trim())
+                            if (key == 'url') {
+                                const idx = line.indexOf(':')
+                                value = line.slice(idx + 1).trim()
+                            }
                             if (key === 'img') {
                                 const imgs = value.split(' ').map(v => v.trim().toLowerCase())
                                 data.img = []
@@ -446,6 +461,22 @@
                             }
                         }
                         slots[key].result = false
+                    }
+
+                    if (slots[key].type === 'requestInfo') {
+                        const checker = ['url', 'cooltime']
+                        for (const check of checker) {
+                            if (slots[key].hasOwnProperty(check) === false) {
+                                console.error(`There is no ${check} at ${key}`)
+                                delete slots[key]
+                                return
+                            }
+                            if (slots[key][check] === undefined || slots[key][check] === '') {
+                                console.error(`There is no value of ${key}-${check}`)
+                                delete slots[key]
+                                return
+                            }
+                        }
                     }
                 }
             }
@@ -677,8 +708,26 @@
             }
         }
 
-        const elapsed = performance.now() - start
+        // Request Information
+        for (const name of Object.keys(slots)) {
+            if (slots[name]['type'] == 'requestInfo') {
+                if (slots[name]['run'] && !slots[name]['cooling']) {
+                    slots[name]['cooling'] = true
+                    const cooltime = Number(slots[name].cooltime)
+                    const url = slots[name].url
+                    fetch(url).then(response => response.text()).then(data => {
+                        folderSlot.controllers.find(c => c.property === name).name(`🔘 ${name} [${data}]`)
+                    })
+                    setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
+                }
+            }
+        }
+
+        const end = performance.now()
+        const elapsed = end - start
         const delay = Math.max(0, (1000 / guiObj.fps) - elapsed)
+
+        loopTime.setValue(Math.round(elapsed))
         setTimeout(loop, delay)
     }
 

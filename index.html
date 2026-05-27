@@ -3,7 +3,7 @@
 
 <head>
     <meta charset='UTF-8'>
-    <title>만들오토 v1.5 (2026.05.25)</title>
+    <title>만들오토 v1.6 (2026.05.27)</title>
     <script src='https://cdn.jsdelivr.net/npm/lil-gui@0.21'></script>
     <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
     <script src='capture.js'></script>
@@ -25,6 +25,7 @@
     const ctxCrop = canvasCrop.getContext('2d', { willReadFrequently: true })
 
     const slots = {}
+    const slotTexts = {}
     const imgObj = {}
     const imgMatObj = {}
 
@@ -91,6 +92,16 @@
         formRequestInfo: () => {
             const text = `type : requestInfo\nurl : \ncooltime : `
             downloadTextFile('Form_RequestInfo', text)
+        },
+        saveData: () => {
+            saveImagesToStorage()
+            saveTxtToStorage()
+            alert('Data saved to localStorage.')
+        },
+        loadData: () => {
+            loadImagesFromStorage().then(() => {
+                loadTxtFromStorage()
+            })
         }
     }
 
@@ -204,6 +215,9 @@
     folderPos.add(guiObj, 'guiToBottom').name('Bottom')
 
     const loopTime = folderInfo.add(guiObj, 'loopTime').name('Loop Time (ms)')
+
+    folderTool.add(guiObj, 'saveData').name('Save Data to Storage')
+    folderTool.add(guiObj, 'loadData').name('Load Data from Storage')
 
 
     const wait = msec => {
@@ -330,7 +344,6 @@
                         const gray = new cv.Mat()
                         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
                         imgMatObj[key] = gray.clone()
-                        // console.log('Mat created:', key)
                         src.delete()
                         gray.delete()
                         resolve()
@@ -344,163 +357,673 @@
         input.click()
     }
 
+
+    function urlToBase64(url) {
+        return new Promise(resolve => {
+            const img = new Image()
+
+            img.onload = () => {
+                const canvas = document.createElement('canvas')
+                canvas.width = img.width
+                canvas.height = img.height
+
+                const ctx = canvas.getContext('2d')
+                ctx.drawImage(img, 0, 0)
+
+                resolve(canvas.toDataURL('image/png'))
+            }
+
+            img.src = url
+        })
+    }
+
+
+    async function saveImagesToStorage() {
+        const data = {}
+
+        for (const [key, url] of Object.entries(imgObj)) {
+            data[key] = await urlToBase64(url)
+        }
+
+        localStorage.setItem('images', JSON.stringify(data))
+    }
+
+
+    async function loadImagesFromStorage() {
+        const json = localStorage.getItem('images')
+
+        if (!json) return
+
+        const data = JSON.parse(json)
+
+        const tasks = Object.entries(data).map(([key, base64]) => {
+            return new Promise(resolve => {
+                imgObj[key] = base64
+
+                const img = new Image()
+
+                img.onload = () => {
+                    const src = cv.imread(img)
+
+                    const gray = new cv.Mat()
+                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+
+                    if (imgMatObj[key]) {
+                        imgMatObj[key].delete()
+                    }
+
+                    imgMatObj[key] = gray.clone()
+
+                    src.delete()
+                    gray.delete()
+
+                    resolve()
+                }
+
+                img.src = base64
+            })
+        })
+
+        await Promise.all(tasks)
+
+        addImgBtn.name(`Add Images. (${Object.keys(imgObj).length})`)
+    }
+
+    async function saveTxtToStorage() {
+
+        const saveData = {}
+
+        Object.keys(slotTexts).forEach(key => {
+            saveData[key] = slotTexts[key]
+        })
+
+        localStorage.setItem(
+            'slotFiles',
+            JSON.stringify(saveData)
+        )
+    }
+
+    function parseSlotText(name, text) {
+
+        // For GUI checkbox.
+        guiObj[name] = false
+
+        const lines = text.split('\n')
+
+        const data = {}
+
+        data.cooling = false
+        data.run = false
+
+        lines.forEach(line => {
+
+            console.log(line)
+
+            let [key, value] = line
+                .split(':')
+                .map(v => v.trim())
+
+            if (key == 'url') {
+                const idx = line.indexOf(':')
+                value = line.slice(idx + 1).trim()
+            }
+
+            if (key === 'img') {
+
+                const imgs = value
+                    .split(' ')
+                    .map(v => v.trim().toLowerCase())
+
+                data.img = []
+
+                data.img.push(...imgs)
+
+                data.mats = data.img.map(
+                    v => imgMatObj[v.split('.')[0]]
+                )
+
+                data.scale =
+                    typeof (data.scale) == 'undefined'
+                        ? 0.5
+                        : Number(data.scale)
+
+                data.result = {
+                    value: 0,
+                    cx: 0,
+                    cy: 0,
+                    bool: false
+                }
+
+            } else {
+
+                data[key] = value
+            }
+        })
+
+        slots[name] = data
+    }
+
+    function validateSlots() {
+
+        for (const key of Object.keys(slots)) {
+
+            if (slots[key].type === undefined) {
+
+                console.log('Type not defined.')
+
+                delete slots[key]
+
+                return false
+
+            } else {
+
+                if (slots[key].type === 'timer') {
+
+                    const checker = ['key', 'cooltime']
+
+                    for (const check of checker) {
+
+                        if (slots[key].hasOwnProperty(check) === false) {
+
+                            console.error(`There is no ${check} at ${key}`)
+
+                            delete slots[key]
+
+                            return false
+                        }
+
+                        if (
+                            slots[key][check] === undefined
+                            || slots[key][check] === ''
+                        ) {
+
+                            console.error(`There is no value of ${key}-${check}`)
+
+                            delete slots[key]
+
+                            return false
+                        }
+                    }
+                }
+
+                if (slots[key].type === 'img') {
+
+                    const checker = [
+                        'key',
+                        'img',
+                        'cooltime',
+                        'x1',
+                        'x2',
+                        'y1',
+                        'y2',
+                        'threshold'
+                    ]
+
+                    for (const check of checker) {
+
+                        if (slots[key].hasOwnProperty(check) === false) {
+
+                            console.error(`There is no ${check} at ${key}`)
+
+                            delete slots[key]
+
+                            return false
+                        }
+
+                        if (
+                            slots[key][check] === undefined
+                            || slots[key][check] === ''
+                        ) {
+
+                            console.error(`There is no value of ${key}-${check}`)
+
+                            delete slots[key]
+
+                            return false
+                        }
+                    }
+
+                    for (const i of slots[key].img) {
+
+                        if (imgMatObj[i.split('.')[0]] === undefined) {
+
+                            console.error(`ImageSlot ${key} Mat Error.`)
+
+                            delete slots[key]
+
+                            return false
+                        }
+                    }
+                }
+
+                if (slots[key].type === 'script') {
+
+                    const checker = [
+                        'key',
+                        'slots',
+                        'cooltime'
+                    ]
+
+                    for (const check of checker) {
+
+                        if (slots[key].hasOwnProperty(check) === false) {
+
+                            console.error(`There is no ${check} at ${key}`)
+
+                            delete slots[key]
+
+                            return false
+                        }
+
+                        if (
+                            slots[key][check] === undefined
+                            || slots[key][check] === ''
+                        ) {
+
+                            console.error(`There is no value of ${key}-${check}`)
+
+                            delete slots[key]
+
+                            return false
+                        }
+
+                        for (
+                            const s of slots[key]
+                                .slots
+                                .split(' ')
+                                .filter(Boolean)
+                        ) {
+
+                            if (
+                                slots[s.replace('!', '')]
+                                === undefined
+                            ) {
+
+                                console.error(`Script ${key} slots Error.`)
+
+                                delete slots[key]
+
+                                return false
+                            }
+                        }
+                    }
+
+                    slots[key].result = false
+                }
+
+                if (slots[key].type === 'requestInfo') {
+
+                    const checker = ['url', 'cooltime']
+
+                    for (const check of checker) {
+
+                        if (slots[key].hasOwnProperty(check) === false) {
+
+                            console.error(`There is no ${check} at ${key}`)
+
+                            delete slots[key]
+
+                            return false
+                        }
+
+                        if (
+                            slots[key][check] === undefined
+                            || slots[key][check] === ''
+                        ) {
+
+                            console.error(`There is no value of ${key}-${check}`)
+
+                            delete slots[key]
+
+                            return false
+                        }
+                    }
+                }
+            }
+        }
+
+        return true
+    }
+
+    function refreshSlotGUI() {
+
+        addTxtBtn.name(
+            `Add Slot Files. (${Object.keys(slots).length})`
+        )
+
+        Object.keys(slots).forEach(key => {
+
+            if (
+                folderSlot.controllers.find(
+                    c => c.property === key
+                ) === undefined
+            ) {
+
+                folderSlot
+                    .add(guiObj, key)
+                    .name(`🔘 ${key}`)
+                    .onChange(value => {
+                        slots[key].run = value
+                    })
+
+                const opt = ['Capture', 'ROI']
+
+                Object.keys(slots).forEach(key => {
+
+                    if (slots[key]['type'] == 'img') {
+                        opt.push(key)
+                    }
+                })
+
+                viewSelect.options(opt)
+            }
+        })
+    }
+
+    async function loadTxtFromStorage() {
+
+        const json = localStorage.getItem('slotFiles')
+
+        if (!json) return
+
+        const data = JSON.parse(json)
+
+        Object.entries(data).forEach(([name, text]) => {
+
+            slotTexts[name] = text
+
+            parseSlotText(name, text)
+        })
+
+        if (validateSlots() === false) {
+            return
+        }
+
+        refreshSlotGUI()
+    }
+
     function addTxt() {
+
         const input = document.createElement('input')
+
         input.type = 'file'
+
         input.accept = '.txt'
+
         input.multiple = true
+
         input.onchange = async e => {
+
             const files = Array.from(e.target.files)
+
             const tasks = files.map(file => {
+
                 return new Promise(resolve => {
+
                     const reader = new FileReader()
+
                     reader.onload = event => {
+
                         const name = file.name.replace('.txt', '')
 
-                        //For GUI checkbox.
-                        guiObj[name] = false
-
                         const text = event.target.result
-                        const lines = text.split('\n')
-                        const data = {}
-                        data.cooling = false
-                        data.run = false
-                        lines.forEach(line => {
-                            console.log(line)
-                            let [key, value] = line.split(':').map(v => v.trim())
-                            if (key == 'url') {
-                                const idx = line.indexOf(':')
-                                value = line.slice(idx + 1).trim()
-                            }
-                            if (key === 'img') {
-                                const imgs = value.split(' ').map(v => v.trim().toLowerCase())
-                                data.img = []
-                                data.img.push(...imgs)
-                                data.mats = data.img.map(v => imgMatObj[v.split('.')[0]])
-                                data.scale = typeof (data.scale) == 'undefined' ? 0.5 : Number(data.scale)
-                                data.result = { value: 0, cx: 0, cy: 0, bool: false }
-                            } else {
-                                data[key] = value
-                            }
-                        })
-                        slots[name] = data
+
+                        slotTexts[name] = text
+
+                        parseSlotText(name, text)
+
                         resolve()
                     }
+
                     reader.readAsText(file)
                 })
             })
 
             await Promise.all(tasks)
 
-            // Check slots
-            for (const key of Object.keys(slots)) {
-                if (slots[key].type === undefined) {
-                    console.log('Type not defined.')
-                    delete slots[key]
-                    return
-                } else {
-                    if (slots[key].type === 'timer') {
-                        const checker = ['key', 'cooltime']
-                        for (const check of checker) {
-                            if (slots[key].hasOwnProperty(check) === false) {
-                                console.error(`There is no ${check} at ${key}`)
+            if (validateSlots() === false) {
+                return
+            }
+
+            await saveTxtToStorage()
+
+            refreshSlotGUI()
+        }
+
+        input.click()
+    }
+
+
+    function parseSlotText(name, text) {
+        // For GUI checkbox.
+        guiObj[name] = false
+
+        const lines = text.split('\n')
+
+        const data = {}
+        data.cooling = false
+        data.run = false
+
+        lines.forEach(line => {
+            console.log(line)
+
+            let [key, value] = line.split(':').map(v => v.trim())
+
+            if (key == 'url') {
+                const idx = line.indexOf(':')
+                value = line.slice(idx + 1).trim()
+            }
+
+            if (key === 'img') {
+                const imgs = value
+                    .split(' ')
+                    .map(v => v.trim().toLowerCase())
+
+                data.img = []
+
+                data.img.push(...imgs)
+
+                data.mats = data.img.map(
+                    v => imgMatObj[v.split('.')[0]]
+                )
+
+                data.scale =
+                    typeof (data.scale) == 'undefined'
+                        ? 0.5
+                        : Number(data.scale)
+
+                data.result = {
+                    value: 0,
+                    cx: 0,
+                    cy: 0,
+                    bool: false
+                }
+
+            } else {
+                data[key] = value
+            }
+        })
+
+        slots[name] = data
+    }
+
+
+    function validateSlots() {
+        for (const key of Object.keys(slots)) {
+
+            if (slots[key].type === undefined) {
+                console.log('Type not defined.')
+                delete slots[key]
+                return false
+            }
+
+            else {
+
+                if (slots[key].type === 'timer') {
+
+                    const checker = ['key', 'cooltime']
+
+                    for (const check of checker) {
+
+                        if (slots[key].hasOwnProperty(check) === false) {
+                            console.error(`There is no ${check} at ${key}`)
+                            delete slots[key]
+                            return false
+                        }
+
+                        if (slots[key][check] === undefined || slots[key][check] === '') {
+                            console.error(`There is no value of ${key}-${check}`)
+                            delete slots[key]
+                            return false
+                        }
+                    }
+                }
+
+                if (slots[key].type === 'img') {
+
+                    const checker = [
+                        'key',
+                        'img',
+                        'cooltime',
+                        'x1',
+                        'x2',
+                        'y1',
+                        'y2',
+                        'threshold'
+                    ]
+
+                    for (const check of checker) {
+
+                        if (slots[key].hasOwnProperty(check) === false) {
+                            console.error(`There is no ${check} at ${key}`)
+                            delete slots[key]
+                            return false
+                        }
+
+                        if (slots[key][check] === undefined || slots[key][check] === '') {
+                            console.error(`There is no value of ${key}-${check}`)
+                            delete slots[key]
+                            return false
+                        }
+                    }
+
+                    for (const i of slots[key].img) {
+
+                        if (imgMatObj[i.split('.')[0]] === undefined) {
+                            console.error(`ImageSlot ${key} Mat Error.`)
+                            delete slots[key]
+                            return false
+                        }
+                    }
+                }
+
+                if (slots[key].type === 'script') {
+
+                    const checker = ['key', 'slots', 'cooltime']
+
+                    for (const check of checker) {
+
+                        if (slots[key].hasOwnProperty(check) === false) {
+                            console.error(`There is no ${check} at ${key}`)
+                            delete slots[key]
+                            return false
+                        }
+
+                        if (slots[key][check] === undefined || slots[key][check] === '') {
+                            console.error(`There is no value of ${key}-${check}`)
+                            delete slots[key]
+                            return false
+                        }
+
+                        for (const s of slots[key].slots.split(' ').filter(Boolean)) {
+
+                            if (slots[s.replace('!', '')] === undefined) {
+                                console.error(`Script ${key} slots Error.`)
                                 delete slots[key]
-                                return
-                            }
-                            if (slots[key][check] === undefined || slots[key][check] === '') {
-                                console.error(`There is no value of ${key}-${check}`)
-                                delete slots[key]
-                                return
+                                return false
                             }
                         }
                     }
 
-                    if (slots[key].type === 'img') {
-                        const checker = ['key', 'img', 'cooltime', 'x1', 'x2', 'y1', 'y2', 'threshold']
-                        for (const check of checker) {
-                            if (slots[key].hasOwnProperty(check) === false) {
-                                console.error(`There is no ${check} at ${key}`)
-                                delete slots[key]
-                                return
-                            }
-                            if (slots[key][check] === undefined || slots[key][check] === '') {
-                                console.error(`There is no value of ${key}-${check}`)
-                                delete slots[key]
-                                return
-                            }
-                        }
-                        for (const i of slots[key].img) {
-                            if (imgMatObj[i.split('.')[0]] === undefined) {
-                                console.error(`ImageSlot ${key} Mat Error.`)
-                                delete slots[key]
-                                return
-                            }
+                    slots[key].result = false
+                }
+
+                if (slots[key].type === 'requestInfo') {
+
+                    const checker = ['url', 'cooltime']
+
+                    for (const check of checker) {
+
+                        if (slots[key].hasOwnProperty(check) === false) {
+                            console.error(`There is no ${check} at ${key}`)
+                            delete slots[key]
+                            return false
                         }
 
-                    }
-
-                    if (slots[key].type === 'script') {
-                        const checker = ['key', 'slots', 'cooltime']
-                        for (const check of checker) {
-                            if (slots[key].hasOwnProperty(check) === false) {
-                                console.error(`There is no ${check} at ${key}`)
-                                delete slots[key]
-                                return
-                            }
-                            if (slots[key][check] === undefined || slots[key][check] === '') {
-                                console.error(`There is no value of ${key}-${check}`)
-                                delete slots[key]
-                                return
-                            }
-                            for (const s of slots[key].slots.split(' ').filter(Boolean)) {
-                                if (slots[s.replace('!', '')] === undefined) {
-                                    console.error(`Script ${key} slots Error.`)
-                                    delete slots[key]
-                                    return
-                                }
-                            }
-                        }
-                        slots[key].result = false
-                    }
-
-                    if (slots[key].type === 'requestInfo') {
-                        const checker = ['url', 'cooltime']
-                        for (const check of checker) {
-                            if (slots[key].hasOwnProperty(check) === false) {
-                                console.error(`There is no ${check} at ${key}`)
-                                delete slots[key]
-                                return
-                            }
-                            if (slots[key][check] === undefined || slots[key][check] === '') {
-                                console.error(`There is no value of ${key}-${check}`)
-                                delete slots[key]
-                                return
-                            }
+                        if (slots[key][check] === undefined || slots[key][check] === '') {
+                            console.error(`There is no value of ${key}-${check}`)
+                            delete slots[key]
+                            return false
                         }
                     }
                 }
             }
+        }
 
-            addTxtBtn.name(`Add Slot Files. (${Object.keys(slots).length})`)
+        return true
+    }
 
-            Object.keys(slots).forEach(key => {
-                if (folderSlot.controllers.find(c => c.property === key) === undefined) {
-                    folderSlot.add(guiObj, key).name(`🔘 ${key}`).onChange(value => {
+
+    function refreshSlotGUI() {
+
+        addTxtBtn.name(
+            `Add Slot Files. (${Object.keys(slots).length})`
+        )
+
+        Object.keys(slots).forEach(key => {
+
+            if (
+                folderSlot.controllers.find(
+                    c => c.property === key
+                ) === undefined
+            ) {
+
+                folderSlot
+                    .add(guiObj, key)
+                    .name(`🔘 ${key}`)
+                    .onChange(value => {
                         slots[key].run = value
                     })
-                    // Add View Mode Select
-                    const opt = ['Capture', 'ROI']
-                    Object.keys(slots).forEach(key => {
-                        if (slots[key]['type'] == 'img') {
-                            opt.push(key)
-                        }
-                    })
-                    viewSelect.options(opt)
-                }
-            })
-        }
-        input.click()
+
+                const opt = ['Capture', 'ROI']
+
+                Object.keys(slots).forEach(key => {
+
+                    if (slots[key]['type'] == 'img') {
+                        opt.push(key)
+                    }
+                })
+
+                viewSelect.options(opt)
+            }
+        })
     }
+
+
+    async function saveTxtToStorage() {
+
+        const saveData = {}
+
+        Object.keys(slotTexts).forEach(key => {
+            saveData[key] = slotTexts[key]
+        })
+
+        localStorage.setItem(
+            'slotFiles',
+            JSON.stringify(saveData)
+        )
+    }
+
 
 
     const getTimestamp = () => {

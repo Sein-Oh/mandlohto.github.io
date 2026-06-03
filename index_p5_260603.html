@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset='utf-8' />
+    <title>만들오토 v1.7 (2026.06.03)</title>
+    <script src='https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.min.js'></script>
+    <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
+    <style>
+        select {
+            text-align: center;
+        }
+
+        button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /* background-color: white; */
+            /* border: 1px solid gray; */
+            /* border-radius: 2px; */
+        }
+    </style>
+</head>
+
+<body>
+</body>
+<script>
+    let cnv, cap, capForSave
+    let inputURL, streamURL
+    let selCapture, selInput, selView, selFPS
+    let btnCapture, btnSaveStorage, btnLoadStorage, btnAddFiles
+    let ROI = []
+    let ratio = 1
+    let info = ''
+    let infoTimer
+
+    const slots = {}
+    const slotTexts = {}
+    const imgObj = {}
+    const imgMatObj = {}
+
+    const cnvWidth = 320
+
+    function getTimestamp() {
+        let now = new Date()
+        let YY = String(now.getFullYear()).slice(-2)
+        let MM = String(now.getMonth() + 1).padStart(2, '0')
+        let DD = String(now.getDate()).padStart(2, '0')
+        let HH = String(now.getHours()).padStart(2, '0')
+        let mm = String(now.getMinutes()).padStart(2, '0')
+        let SS = String(now.getSeconds()).padStart(2, '0')
+        return `${YY}${MM}${DD}${HH}${mm}${SS}`
+    }
+
+
+    function notify(msg) {
+        clearTimeout(infoTimer)
+        info = msg
+        infoTimer = setTimeout(() => {info = ''}, 3000)
+    }
+
+    function setup() {
+        frameRate(5)
+        pixelDensity(1)
+        cnv = createCanvas(cnvWidth, 180)
+        cnv.position(5, 30)
+        capForSave = createGraphics(cnvWidth, 180)
+        background(0)
+
+        selCapture = createSelect()
+        selCapture.position(5, 8)
+        selCapture.size(90, 20)
+        selCapture.option('캡처선택')
+        selCapture.option('데스크탑 캡처')
+        selCapture.option('스트리밍 서버')
+        selCapture.option('전면 카메라')
+        selCapture.option('후면 카메라')
+        selCapture.elt.disabled = true
+        selCapture.changed(selectCapture)
+
+        selView = createSelect()
+        selView.position(5, 8)
+        selView.size(90, 20)
+        selView.option('전체보기')
+        selView.option('ROI보기')
+        selView.hide()
+        selView.changed(selectView)
+
+        btnCapture = createButton('캡처저장')
+        btnCapture.position(100, 8)
+        btnCapture.size(75, 20)
+        btnCapture.mousePressed(saveCap)
+
+        selFPS = createSelect()
+        selFPS.position(180, 8)
+        selFPS.size(60, 20)
+        selFPS.option('1 FPS')
+        selFPS.option('2 FPS')
+        selFPS.option('5 FPS')
+        selFPS.option('10 FPS')
+        selFPS.option('20 FPS')
+        selFPS.option('30 FPS')
+        selFPS.option('60 FPS')
+        selFPS.changed(selectFPS)
+        selFPS.value('5 FPS')
+
+        selInput = createSelect()
+        selInput.position(245, 8)
+        selInput.size(80, 20)
+        selInput.option('입력선택')
+        selInput.option('아두이노')
+        selInput.option('웹서버')
+        selInput.changed(selectInput)
+
+        btnAddFiles = createButton('파일 추가')
+        btnAddFiles.position(5, cnv.height + 35)
+        btnAddFiles.size(100, 20)
+        btnAddFiles.mousePressed(addFiles)
+
+        btnSaveStorage = createButton('데이터 저장')
+        btnSaveStorage.position(110, cnv.height + 35)
+        btnSaveStorage.size(100, 20)
+        btnSaveStorage.mousePressed(() => {
+            saveImgToStorage().then(saveTxtToStorage).then(() => report('save'))
+        })
+
+        btnLoadStorage = createButton('데이터 불러오기')
+        btnLoadStorage.position(215, cnv.height + 35)
+        btnLoadStorage.size(110, 20)
+        btnLoadStorage.mousePressed(() => {
+            loadImgFromStorage().then(loadTxtFromStorage).then(() => report('load'))
+        })
+    }
+
+
+    function draw() {
+        if (cap) image(cap, 0, 0, width, height)
+        else background(0)
+        
+        // FPS 표시
+        textSize(16)
+        noStroke()
+        fill(20, 255, 20)
+        text(`FPS: ${frameRate().toFixed(0)}`, 10, 20)
+
+        // INFO 표시
+        fill(255, 255, 0)
+        text(info, 10, 40)
+
+        if (cap && selView.value() === 'ROI보기') {
+            const [x1, y1, x2, y2] = ROI.map(v => Math.round(v / ratio))
+            noFill()
+            strokeWeight(2)
+            stroke(20, 20, 255)
+            rect(x1, y1, x2 - x1, y2 - y1)
+        }
+    }
+
+    function cvLoaded() {
+        cv.onRuntimeInitialized = () => {
+            console.log('opencv.js loaded.')
+            selCapture.elt.disabled = false
+        }
+    }
+
+
+    function selectView() {
+        if (selView.value() !== 'ROI보기') return selView.value('전체보기')
+        const v = prompt(`ROI 영역을 입력하세요 (x1, y1, x2, y2)\n캡처 크기 ${cap.width}x${cap.height}`, ROI.join(', '))
+        if (v === null) return selView.value('전체보기')
+        const n = v.trim().split(/\s*,\s*/).map(Number)
+        if (n.length !== 4 || !n.every(Number.isFinite) || n[0] >= n[2] || n[1] >= n[3]) {
+            alert('잘못된 ROI 입력입니다.')
+            return selView.value('전체보기')
+        }
+        ROI = n
+        console.log('ROI:', ROI)
+    }
+
+
+    function selectCapture() {
+        console.log(selCapture.value())
+        if (selCapture.value() === '데스크탑 캡처') {
+            startCapture()
+        } else if (selCapture.value() === '스트리밍 서버') {
+            const url = prompt('스트리밍 서버 URL을 입력하세요:', streamURL)
+            if (url) startStream(url)
+        } else if (selCapture.value() === '전면 카메라') {
+            startCamera('user')
+        } else if (selCapture.value() === '후면 카메라') {
+            startCamera('environment')
+        }
+    }
+
+
+    function selectFPS() {
+        const fps = parseInt(selFPS.value())
+        frameRate(fps)
+        console.log(`FPS set to ${fps}`)
+    }
+
+
+    function selectInput() {
+        console.log(selInput.value())
+    }
+
+
+    function startStream(url) {
+        cap = createImg(url, '', 'anonymous', () => {
+            localStorage.setItem('stream_url', url)
+            onCapReady()
+        })
+    }
+
+
+    async function urlToBase64(url) {
+        const blob = await fetch(url).then(r => r.blob())
+        return await new Promise(resolve => {
+            const reader = new FileReader()
+            reader.onloadend = () => {
+                resolve(reader.result)
+            }
+            reader.readAsDataURL(blob)
+        })
+    }
+
+
+    async function saveImgToStorage() {
+        const data = {}
+        for (const [key, url] of Object.entries(imgObj)) {
+            data[key] = await urlToBase64(url)
+        }
+        localStorage.setItem('images', JSON.stringify(data))
+    }
+
+
+    async function loadImgFromStorage() {
+        const json = localStorage.getItem('images')
+        if (!json) return
+        const data = JSON.parse(json)
+        const tasks = Object.entries(data).map(([key, base64]) => {
+            return new Promise(resolve => {
+                imgObj[key] = base64
+                const img = new Image()
+                img.onload = () => {
+                    const src = cv.imread(img)
+                    const gray = new cv.Mat()
+                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+                    if (imgMatObj[key]) {
+                        imgMatObj[key].delete()
+                    }
+                    imgMatObj[key] = gray.clone()
+                    src.delete()
+                    gray.delete()
+                    resolve()
+                }
+                img.src = base64
+            })
+        })
+        await Promise.all(tasks)
+    }
+
+
+    async function loadTxtFromStorage() {
+        const json = localStorage.getItem('slotFiles')
+        if (!json) return
+        const data = JSON.parse(json)
+        Object.entries(data).forEach(([name, text]) => {
+            slotTexts[name] = text
+            parseSlotText(name, text)
+        })
+        if (validateSlots() === false) {
+            return
+        }
+    }
+
+
+    const loadImg = file => new Promise(resolve => {
+        const key = file.name.split('.')[0]
+        const url = URL.createObjectURL(file)
+        imgObj[key] = url
+        const img = new Image()
+        img.onload = () => {
+            const src = cv.imread(img), gray = new cv.Mat()
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+            imgMatObj[key]?.delete()
+            imgMatObj[key] = gray.clone()
+            src.delete()
+            gray.delete()
+            resolve()
+        }
+        img.src = url
+    })
+
+    const loadTxt = file => new Promise(resolve => {
+        const reader = new FileReader()
+        reader.onload = e => {
+            const name = file.name.replace(/\.txt$/i, '')
+            const text = e.target.result
+            slotTexts[name] = text
+            parseSlotText(name, text)
+            resolve()
+        }
+        reader.readAsText(file)
+    })
+
+
+    function report(type) {
+        const lenImg = Object.keys(imgObj).length
+        const lenTxt = Object.keys(slots).length
+        if (type === 'load') {
+            if (lenImg && lenTxt) notify(`이미지 ${lenImg}개, 텍스트 ${lenTxt}개 로드 완료.`)
+            else if (lenImg) notify(`이미지 ${lenImg}개 로드 완료.`)
+            else if (lenTxt) notify(`텍스트 ${lenTxt}개 로드 완료.`)
+        } else if (type === 'save') {
+            if (lenImg && lenTxt) notify(`이미지 ${lenImg}개, 텍스트 ${lenTxt}개 저장 완료.`)
+            else if (lenImg) notify(`이미지 ${lenImg}개 저장 완료.`)
+            else if (lenTxt) notify(`텍스트 ${lenTxt}개 저장 완료.`)        
+        }
+    }
+
+    
+    async function addFiles() {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/*,.txt'
+        input.multiple = true
+
+        input.onchange = async e => {
+            const files = Array.from(e.target.files)
+            const imgFiles = files.filter(f => f.type.startsWith('image/'))
+            const txtFiles = files.filter(f => f.name.toLowerCase().endsWith('.txt'))
+
+            await Promise.all(imgFiles.map(loadImg))
+            await Promise.all(txtFiles.map(loadTxt))
+
+            if (txtFiles.length) {
+                if (!validateSlots()) return
+                await saveTxtToStorage()
+            }
+            report('load')
+        }
+        input.click()
+    }
+
+    function parseSlotText(name, text) {
+        const lines = text.split('\n')
+        const data = {}
+        data.cooling = false
+        data.run = false
+        lines.forEach(line => {
+            let [key, value] = line.split(':').map(v => v.trim())
+            if (key == 'url') {
+                const idx = line.indexOf(':')
+                value = line.slice(idx + 1).trim()
+            }
+            if (key === 'img') {
+                const imgs = value.split(' ').map(v => v.trim().toLowerCase())
+                data.img = []
+                data.img.push(...imgs)
+                data.mats = data.img.map(v => imgMatObj[v.split('.')[0]])
+                data.scale = typeof (data.scale) == 'undefined' ? 0.5 : Number(data.scale)
+                data.result = { value: 0, cx: 0, cy: 0, bool: false }
+            } else {
+                data[key] = value
+            }
+        })
+        slots[name] = data
+    }
+
+
+    function validateSlots() {
+        for (const key of Object.keys(slots)) {
+            if (slots[key].type === undefined) {
+                console.log('Type not defined.')
+                delete slots[key]
+                return false
+            } else {
+                if (slots[key].type === 'timer') {
+                    const checker = ['key', 'cooltime']
+                    for (const check of checker) {
+                        if (slots[key].hasOwnProperty(check) === false) {
+                            console.error(`There is no ${check} at ${key}`)
+                            delete slots[key]
+                            return false
+                        }
+                        if (slots[key][check] === undefined || slots[key][check] === '') {
+                            console.error(`There is no value of ${key}-${check}`)
+                            delete slots[key]
+                            return false
+                        }
+                    }
+                }
+                if (slots[key].type === 'img') {
+                    const checker = ['key', 'img', 'cooltime', 'x1', 'x2', 'y1', 'y2', 'threshold']
+                    for (const check of checker) {
+                        if (slots[key].hasOwnProperty(check) === false) {
+                            console.error(`There is no ${check} at ${key}`)
+                            delete slots[key]
+                            return false
+                        }
+                        if (slots[key][check] === undefined || slots[key][check] === '') {
+                            console.error(`There is no value of ${key}-${check}`)
+                            delete slots[key]
+                            return false
+                        }
+                    }
+                    for (const i of slots[key].img) {
+                        if (imgMatObj[i.split('.')[0]] === undefined) {
+                            console.error(`ImageSlot ${key} Mat Error.`)
+                            delete slots[key]
+                            return false
+                        }
+                    }
+                }
+                if (slots[key].type === 'script') {
+                    const checker = ['key', 'slots', 'cooltime']
+                    for (const check of checker) {
+                        if (slots[key].hasOwnProperty(check) === false) {
+                            console.error(`There is no ${check} at ${key}`)
+                            delete slots[key]
+                            return false
+                        }
+                        if (slots[key][check] === undefined || slots[key][check] === '') {
+                            console.error(`There is no value of ${key}-${check}`)
+                            delete slots[key]
+                            return false
+                        }
+                        for (const s of slots[key].slots.split(' ').filter(Boolean)) {
+                            if (slots[s.replace('!', '')] === undefined) {
+                                console.error(`Script ${key} slots Error.`)
+                                delete slots[key]
+                                return false
+                            }
+                        }
+                    }
+                    slots[key].result = false
+                }
+                if (slots[key].type === 'requestInfo') {
+                    const checker = ['url', 'cooltime']
+                    for (const check of checker) {
+                        if (slots[key].hasOwnProperty(check) === false) {
+                            console.error(`There is no ${check} at ${key}`)
+                            delete slots[key]
+                            return false
+                        }
+                        if (slots[key][check] === undefined || slots[key][check] === '') {
+                            console.error(`There is no value of ${key}-${check}`)
+                            delete slots[key]
+                            return false
+                        }
+                    }
+                }
+            }
+        }
+        return true
+    }
+
+
+    async function saveTxtToStorage() {
+        const saveData = {}
+        Object.keys(slotTexts).forEach(key => {
+            saveData[key] = slotTexts[key]
+        })
+        localStorage.setItem('slotFiles', JSON.stringify(saveData))
+    }
+
+
+    function startCamera(facingMode = 'environment') {
+        const constraints = { audio: false, video: { exact: facingMode } }
+        cap = createCapture(constraints, () => onCapReady())
+    }
+
+
+    function startCapture() {
+        navigator.mediaDevices.getDisplayMedia({ video: true }).then((stream) => {
+            cap = createVideo()
+            cap.elt.srcObject = stream
+            cap.elt.play()
+            cap.elt.onloadedmetadata = () => onCapReady()
+        })
+    }
+
+
+    function onCapReady() {
+        console.log(cap.width, cap.height)
+        ratio = Number(cap.width / cnvWidth)
+        cnv.resize(cnvWidth, Number(cap.height / ratio))
+        ROI = [0, 0, cap.width, cap.height]
+
+        cap.hide()
+        selCapture.hide()
+        selView.show()
+    }
+
+
+    function saveCap() {
+        if (!cap) return alert('캡처된 영상이 없습니다.')
+        const [x1, y1, x2, y2] = ROI
+        const roi = selView.value() === 'ROI보기'
+        const w = roi ? x2 - x1 : cap.width
+        const h = roi ? y2 - y1 : cap.height
+        capForSave.resizeCanvas(w, h)
+        roi ? capForSave.image(cap, 0, 0, w, h, x1, y1, w, h) : capForSave.image(cap, 0, 0)
+        saveCanvas(capForSave, `capture_${getTimestamp()}.jpg`)
+    }
+
+
+    window.onload = () => {
+        console.log('Window.onload.')
+        inputURL = localStorage.getItem('input_url') || ''
+        streamURL = localStorage.getItem('stream_url') || ''
+        console.log('Loaded URLs:', { inputURL, streamURL })
+    }
+
+</script>
+
+</html>

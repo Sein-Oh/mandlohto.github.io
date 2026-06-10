@@ -5,19 +5,35 @@
     <meta charset='utf-8' />
     <title>만들오토 v1.7 (2026.06.03)</title>
     <script src='https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
+    <script src='webserial.js'></script>
     <style>
         select {
             text-align: center;
+        }
+
+        input {
+            box-sizing: border-box;
         }
 
         button {
             display: flex;
             align-items: center;
             justify-content: center;
-            /* background-color: white; */
-            /* border: 1px solid gray; */
-            /* border-radius: 2px; */
+            background-color: #7066E0;
+            border-radius: 5px;
+            border: none;
+            color: white;
+            font-weight: 500;
+        }
+
+        button:hover {
+            background-color: rgb(100.1092391304, 89.2777173913, 221.4222826087);
+        }
+
+        button:disabled {
+            background-color: gray
         }
     </style>
 </head>
@@ -28,11 +44,21 @@
     let cnv, cap, capForSave
     let inputURL, streamURL
     let selCapture, selInput, selView, selFPS
-    let btnCapture, btnSaveStorage, btnLoadStorage, btnAddFiles
+    let btnCapture, btnInput, btnSlot, btnOption
+    let viewMode = 'preview'
+    let inputMode = ''
     let ROI = []
     let ratio = 1
-    let info = ''
-    let infoTimer
+    let fps = 10
+
+    const serial = new WebSerialManager()
+    serial.onReceive = (msg) => {
+        if (msg.trim() === 'OK') {
+            notify('하드웨어 시리얼 통신에 성공했습니다.')
+            inputMode = 'serial'
+            btnInput.elt.disabled = true
+        }
+    }
 
     const slots = {}
     const slotTexts = {}
@@ -54,100 +80,54 @@
 
 
     function notify(msg) {
-        clearTimeout(infoTimer)
-        info = msg
-        infoTimer = setTimeout(() => {info = ''}, 3000)
+        Swal.mixin({ toast: true, position: "top", showConfirmButton: false, timer: 2000, timerProgressBar: true, })
+            .fire({ icon: "success", title: msg });
+    }
+
+
+    function error(msg) {
+        Swal.fire({ icon: 'error', title: '오류 발생', text: msg })
     }
 
     function setup() {
-        frameRate(5)
+        frameRate(fps)
         pixelDensity(1)
         cnv = createCanvas(cnvWidth, 180)
-        cnv.position(5, 30)
+        cnv.position(5, 5)
         capForSave = createGraphics(cnvWidth, 180)
         background(0)
 
-        selCapture = createSelect()
-        selCapture.position(5, 8)
-        selCapture.size(90, 20)
-        selCapture.option('캡처선택')
-        selCapture.option('데스크탑 캡처')
-        selCapture.option('스트리밍 서버')
-        selCapture.option('전면 카메라')
-        selCapture.option('후면 카메라')
-        selCapture.elt.disabled = true
-        selCapture.changed(selectCapture)
+        btnCapture = createButton('캡처시작')
+        btnCapture.size(78, 25)
+        btnCapture.mousePressed(selectCapture)
 
-        selView = createSelect()
-        selView.position(5, 8)
-        selView.size(90, 20)
-        selView.option('전체보기')
-        selView.option('ROI보기')
-        selView.hide()
-        selView.changed(selectView)
+        btnInput = createButton('입력선택')
+        btnInput.size(78, 25)
+        btnInput.mousePressed(selectInput)
 
-        btnCapture = createButton('캡처저장')
-        btnCapture.position(100, 8)
-        btnCapture.size(75, 20)
-        btnCapture.mousePressed(saveCap)
+        btnSlot = createButton('슬롯')
+        btnSlot.size(78, 25)
+        btnSlot.mousePressed(selectSlot)
 
-        selFPS = createSelect()
-        selFPS.position(180, 8)
-        selFPS.size(60, 20)
-        selFPS.option('1 FPS')
-        selFPS.option('2 FPS')
-        selFPS.option('5 FPS')
-        selFPS.option('10 FPS')
-        selFPS.option('20 FPS')
-        selFPS.option('30 FPS')
-        selFPS.option('60 FPS')
-        selFPS.changed(selectFPS)
-        selFPS.value('5 FPS')
+        btnOption = createButton('옵션')
+        btnOption.size(77, 25)
+        btnOption.mousePressed(selectOption)
 
-        selInput = createSelect()
-        selInput.position(245, 8)
-        selInput.size(80, 20)
-        selInput.option('입력선택')
-        selInput.option('아두이노')
-        selInput.option('웹서버')
-        selInput.changed(selectInput)
-
-        btnAddFiles = createButton('파일 추가')
-        btnAddFiles.position(5, cnv.height + 35)
-        btnAddFiles.size(100, 20)
-        btnAddFiles.mousePressed(addFiles)
-
-        btnSaveStorage = createButton('데이터 저장')
-        btnSaveStorage.position(110, cnv.height + 35)
-        btnSaveStorage.size(100, 20)
-        btnSaveStorage.mousePressed(() => {
-            saveImgToStorage().then(saveTxtToStorage).then(() => report('save'))
-        })
-
-        btnLoadStorage = createButton('데이터 불러오기')
-        btnLoadStorage.position(215, cnv.height + 35)
-        btnLoadStorage.size(110, 20)
-        btnLoadStorage.mousePressed(() => {
-            loadImgFromStorage().then(loadTxtFromStorage).then(() => report('load'))
-        })
+        setBtnPosition()
     }
 
 
     function draw() {
         if (cap) image(cap, 0, 0, width, height)
         else background(0)
-        
+
         // FPS 표시
         textSize(16)
         noStroke()
         fill(20, 255, 20)
         text(`FPS: ${frameRate().toFixed(0)}`, 10, 20)
 
-        // INFO 표시
-        fill(255, 255, 0)
-        text(info, 10, 40)
-
-        if (cap && selView.value() === 'ROI보기') {
+        if (cap && viewMode === 'roi') {
             const [x1, y1, x2, y2] = ROI.map(v => Math.round(v / ratio))
             noFill()
             strokeWeight(2)
@@ -156,52 +136,185 @@
         }
     }
 
+
     function cvLoaded() {
         cv.onRuntimeInitialized = () => {
             console.log('opencv.js loaded.')
-            selCapture.elt.disabled = false
+            // selectCapture()
         }
-    }
-
-
-    function selectView() {
-        if (selView.value() !== 'ROI보기') return selView.value('전체보기')
-        const v = prompt(`ROI 영역을 입력하세요 (x1, y1, x2, y2)\n캡처 크기 ${cap.width}x${cap.height}`, ROI.join(', '))
-        if (v === null) return selView.value('전체보기')
-        const n = v.trim().split(/\s*,\s*/).map(Number)
-        if (n.length !== 4 || !n.every(Number.isFinite) || n[0] >= n[2] || n[1] >= n[3]) {
-            alert('잘못된 ROI 입력입니다.')
-            return selView.value('전체보기')
-        }
-        ROI = n
-        console.log('ROI:', ROI)
-    }
-
-
-    function selectCapture() {
-        console.log(selCapture.value())
-        if (selCapture.value() === '데스크탑 캡처') {
-            startCapture()
-        } else if (selCapture.value() === '스트리밍 서버') {
-            const url = prompt('스트리밍 서버 URL을 입력하세요:', streamURL)
-            if (url) startStream(url)
-        } else if (selCapture.value() === '전면 카메라') {
-            startCamera('user')
-        } else if (selCapture.value() === '후면 카메라') {
-            startCamera('environment')
-        }
-    }
-
-
-    function selectFPS() {
-        const fps = parseInt(selFPS.value())
-        frameRate(fps)
-        console.log(`FPS set to ${fps}`)
     }
 
 
     function selectInput() {
-        console.log(selInput.value())
+        Swal.fire({
+            title: '입력방식을 선택하세요.',
+            input: 'select',
+            inputOptions: {
+                serial: '하드웨어 시리얼 통신',
+                server: '서버와 통신',
+            },
+            showCancelButton: false
+        }).then(result => {
+            if (result.isConfirmed) {
+                const value = result.value
+                if (value === 'serial') {
+                    serial.connect().then(() => {
+                        serial.send('check')
+                    })
+                } else if (value === 'server') {
+                    Swal.fire({
+                        input: 'text',
+                        inputLabel: '서버의 URL을 입력하세요.',
+                        inputValue: inputURL
+                    }).then(result => {
+                        if (result.isConfirmed) {
+                            inputURL = result.value
+                            localStorage.setItem('inputURL', inputURL)
+                            inputMode = 'server'
+                            notify(`${inputURL}로 설정되었습니다.`)
+                            btnInput.elt.disabled = true
+                        }
+                    })
+                }
+            }
+        })
+    }
+
+
+    function selectView() {
+        Swal.fire({
+            input: 'text',
+            inputLabel: `ROI 영역을 입력하세요.\n현재 캡처: ${cap.width}x${cap.height}`,
+            inputValue: ROI.join(', ')
+        }).then(result => {
+            if (result.isConfirmed) {
+                const v = result.value
+                const n = v.trim().split(/\s*,\s*/).map(Number)
+                if (n.length !== 4 || !n.every(Number.isFinite) || n[0] >= n[2] || n[1] >= n[3]) {
+                    error('잘못된 ROI 입력입니다.')
+                    return
+                }
+                ROI = n
+                viewMode = 'roi'
+                console.log('ROI:', ROI)
+            }
+        })
+    }
+
+
+    function selectCapture() {
+        Swal.fire({
+            title: '캡처방식을 선택하세요.',
+            input: 'select',
+            inputOptions: {
+                capture: '데스크탑 화면',
+                stream: '이미지 스트리밍',
+                user: '카메라(전면)',
+                environment: '카메라(후면)'
+            },
+            showCancelButton: false
+        }).then(input => {
+            const value = input.value
+            if (value === 'capture') {
+                startCapture()
+            } else if (value === 'stream') {
+                Swal.fire({
+                    input: 'text',
+                    inputLabel: '스트리밍 서버 URL을 입력하세요.',
+                    inputValue: streamURL
+                }).then(url => {
+                    if (url.isConfirmed) {
+                        startStream(url.value)
+                    } else {
+                        console.log('입력이 취소되었습니다.')
+                    }
+                })
+            } else if (value == 'user') {
+                startCamera('user')
+            } else if (value == 'environment') {
+                startCamera('environment')
+            }
+        })
+    }
+
+    function selectOption() {
+        Swal.fire({
+            title: '실행할 기능을 선택하세요.',
+            input: 'select',
+            inputOptions: {
+                capture: '캡처 저장',
+                fps: 'FPS 변경',
+                roi: 'ROI 보기',
+                slot: '슬롯상태 보기'
+            },
+            showCancelButton: true
+        }).then(result => {
+            const value = result.value
+            if (value === 'roi') {
+                selectView()
+            } else if (value === 'capture') {
+                saveCap()
+            } else if (value === 'fps') {
+                selectFPS()
+            }
+        })
+    }
+
+
+    function selectFPS() {
+        Swal.fire({
+            title: '적용할 FPS를 입력하세요',
+            input: 'number',
+            inputAttributes: {
+                min: '1',
+                max: '30',
+                step: '1'
+            },
+            showCancelButton: true,
+            inputValidator: (value) => {
+                const num = Number(value)
+                if (!value || !Number.isInteger(num)) {
+                    return '숫자만 입력하세요.'
+                }
+                if (num < 1 || num > 30) {
+                    return '1~30구간의 값을 입력하세요.'
+                }
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                fps = Number(result.value)
+                frameRate(fps)
+            }
+        })
+    }
+
+
+    function selectSlot() {
+        Swal.fire({
+            title: '사용할 기능을 선택하세요.',
+            input: 'select',
+            inputOptions: {
+                add: '파일 추가하기',
+                save: '저장하기',
+                load: '불러오기'
+            },
+            showCancelButton: true
+        }).then(result => {
+            if (result.isConfirmed) {
+                const value = result.value
+                if (value === 'add') {
+                    addFiles()
+                } else if (value === 'save') {
+                    saveImgToStorage()
+                        .then(() => saveTxtToStorage())
+                        .then(() => report('save'))
+                } else if (value === 'load') {
+                    loadImgFromStorage()
+                        .then(() => loadTxtFromStorage())
+                        .then(() => report('load'))
+                }
+            }
+        })        
     }
 
 
@@ -315,11 +428,11 @@
         } else if (type === 'save') {
             if (lenImg && lenTxt) notify(`이미지 ${lenImg}개, 텍스트 ${lenTxt}개 저장 완료.`)
             else if (lenImg) notify(`이미지 ${lenImg}개 저장 완료.`)
-            else if (lenTxt) notify(`텍스트 ${lenTxt}개 저장 완료.`)        
+            else if (lenTxt) notify(`텍스트 ${lenTxt}개 저장 완료.`)
         }
     }
 
-    
+
     async function addFiles() {
         const input = document.createElement('input')
         input.type = 'file'
@@ -473,7 +586,7 @@
 
 
     function startCapture() {
-        navigator.mediaDevices.getDisplayMedia({ video: true }).then((stream) => {
+        navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, preferCurrentTab: false }).then(stream => {
             cap = createVideo()
             cap.elt.srcObject = stream
             cap.elt.play()
@@ -482,22 +595,29 @@
     }
 
 
+    function setBtnPosition() {
+        btnCapture.position(5, cnv.height + 8)
+        btnInput.position(86, cnv.height + 8)
+        btnSlot.position(167, cnv.height + 8)
+        btnOption.position(248, cnv.height + 8)
+    }
+
+
     function onCapReady() {
         console.log(cap.width, cap.height)
         ratio = Number(cap.width / cnvWidth)
         cnv.resize(cnvWidth, Number(cap.height / ratio))
         ROI = [0, 0, cap.width, cap.height]
-
         cap.hide()
-        selCapture.hide()
-        selView.show()
+        setBtnPosition()
+        btnCapture.elt.disabled = true
     }
 
 
     function saveCap() {
-        if (!cap) return alert('캡처된 영상이 없습니다.')
+        if (!cap) return error('캡처된 영상이 없습니다.')
         const [x1, y1, x2, y2] = ROI
-        const roi = selView.value() === 'ROI보기'
+        const roi = viewMode === 'roi'
         const w = roi ? x2 - x1 : cap.width
         const h = roi ? y2 - y1 : cap.height
         capForSave.resizeCanvas(w, h)

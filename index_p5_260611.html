@@ -3,9 +3,9 @@
 
 <head>
     <meta charset='utf-8' />
-    <title>만들오토 v1.7 (2026.06.03)</title>
+    <title>만들오토 v1.7 (2026.06.11)</title>
     <script src='https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.min.js'></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsframe.js/lib/jsframe.min.js"></script>
     <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
     <script src='webserial.js'></script>
     <style>
@@ -26,6 +26,7 @@
             border: none;
             color: white;
             font-weight: 500;
+            z-index: -1;
         }
 
         button:hover {
@@ -34,6 +35,20 @@
 
         button:disabled {
             background-color: gray
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .container button {
+            width: 80%;
+            height: 30px;
+            z-index: 999;
         }
     </style>
 </head>
@@ -46,17 +61,55 @@
     let selCapture, selInput, selView, selFPS
     let btnCapture, btnInput, btnSlot, btnOption
     let viewMode = 'preview'
-    let inputMode = ''
+    let inputMode = undefined
     let ROI = []
     let ratio = 1
-    let fps = 10
+
+    const jsFrame = new JSFrame()
+
+    function toast(msg) {
+        jsFrame.showToast({ html: msg, align: 'center' })
+    }
+
+
+    function modal(title, msg, buttons) {
+        return new Promise(resolve => {
+            const entries = Object.entries(buttons)
+            const width = 300
+            const height = (40 * entries.length) + 55
+            let htmlStr = '<div class="container">'
+            htmlStr += `<div style="font-size:14px;margin-top:5px;">${msg}</div>`
+            for (const [key, label] of entries) {
+                htmlStr += `<button id="${key}">${label}</button>`
+            }
+            htmlStr += '</div>'
+            const frame = jsFrame.create({
+                title,
+                left: (window.innerWidth - width) / 2,
+                top: (window.innerHeight - height) / 2,
+                width,
+                height,
+                html: htmlStr
+            })
+            console.log(frame.$frame)
+            for (const [key] of entries) {
+                frame.on(`#${key}`, 'click', (_frame) => {
+                    _frame.closeFrame()
+                    resolve(key)
+                })
+            }
+            frame.on('closeButton', 'click', () => resolve(false))
+            frame.showModal()
+        })
+    }
+
 
     const serial = new WebSerialManager()
     serial.onReceive = (msg) => {
         if (msg.trim() === 'OK') {
-            notify('하드웨어 시리얼 통신에 성공했습니다.')
+            toast('하드웨어 시리얼 통신에 성공했습니다.')
             inputMode = 'serial'
-            btnInput.elt.disabled = true
+            // btnInput.elt.disabled = true
         }
     }
 
@@ -79,26 +132,18 @@
     }
 
 
-    function notify(msg) {
-        Swal.mixin({ toast: true, position: "top", showConfirmButton: false, timer: 2000, timerProgressBar: true, })
-            .fire({ icon: "success", title: msg });
-    }
-
-
-    function error(msg) {
-        Swal.fire({ icon: 'error', title: '오류 발생', text: msg })
-    }
-
     function setup() {
-        frameRate(fps)
+        frameRate(10)
         pixelDensity(1)
         cnv = createCanvas(cnvWidth, 180)
         cnv.position(5, 5)
+        cnv.style('z-index', '-1')
         capForSave = createGraphics(cnvWidth, 180)
         background(0)
 
         btnCapture = createButton('캡처시작')
         btnCapture.size(78, 25)
+        btnCapture.elt.disabled = true
         btnCapture.mousePressed(selectCapture)
 
         btnInput = createButton('입력선택')
@@ -107,6 +152,7 @@
 
         btnSlot = createButton('슬롯')
         btnSlot.size(78, 25)
+        btnSlot.elt.disabled = true
         btnSlot.mousePressed(selectSlot)
 
         btnOption = createButton('옵션')
@@ -140,189 +186,141 @@
     function cvLoaded() {
         cv.onRuntimeInitialized = () => {
             console.log('opencv.js loaded.')
-            // selectCapture()
+            btnCapture.elt.disabled = false
+            btnSlot.elt.disabled = false
         }
     }
 
 
-    function selectInput() {
-        Swal.fire({
-            title: '입력방식을 선택하세요.',
-            input: 'select',
-            inputOptions: {
-                serial: '하드웨어 시리얼 통신',
-                server: '서버와 통신',
-            },
-            showCancelButton: false
-        }).then(result => {
-            if (result.isConfirmed) {
-                const value = result.value
-                if (value === 'serial') {
-                    serial.connect().then(() => {
-                        serial.send('check')
-                    })
-                } else if (value === 'server') {
-                    Swal.fire({
-                        input: 'text',
-                        inputLabel: '서버의 URL을 입력하세요.',
-                        inputValue: inputURL
-                    }).then(result => {
-                        if (result.isConfirmed) {
-                            inputURL = result.value
-                            localStorage.setItem('inputURL', inputURL)
-                            inputMode = 'server'
-                            notify(`${inputURL}로 설정되었습니다.`)
-                            btnInput.elt.disabled = true
-                        }
-                    })
-                }
+    async function selectInput() {
+        const value = await modal("입력방식 선택", "입력방식을 선택하세요.", { serial: "하드웨어 시리얼 통신", server: "서버와 통신" })
+        if (value === 'serial') {
+            serial.connect().then(() => serial.send("check"))
+        } else if (value === "server") {
+            const url = prompt("서버의 URL을 입력하세요", inputURL)
+            if (url === undefined) {
+                toast("입력을 취소했습니다.")
+                return
             }
-        })
+            toast(`입력서버 URL을 ${url}로 적용했습니다.`)
+            inputURL = value
+            // btnInput.elt.disabled = true
+            localStorage.setItem('inputURL', inputURL)
+            inputMode = 'server'
+        }
+    }
+
+    function inputTest() {
+        if (inputMode === undefined) {
+            toast("입력방식을 선택 후 사용 가능합니다.")
+            return
+        }
+        const cmd = prompt("명령어를 입력하세요.")
+        if (cmd === undefined) {
+            toast("명령어를 입력하지 않았습니다.")
+            return
+        }
+        console.log(cmd)
     }
 
 
-    function selectView() {
-        Swal.fire({
-            input: 'text',
-            inputLabel: `ROI 영역을 입력하세요.\n현재 캡처: ${cap.width}x${cap.height}`,
-            inputValue: ROI.join(', ')
-        }).then(result => {
-            if (result.isConfirmed) {
-                const v = result.value
-                const n = v.trim().split(/\s*,\s*/).map(Number)
-                if (n.length !== 4 || !n.every(Number.isFinite) || n[0] >= n[2] || n[1] >= n[3]) {
-                    error('잘못된 ROI 입력입니다.')
-                    return
-                }
-                ROI = n
-                viewMode = 'roi'
-                console.log('ROI:', ROI)
-            }
+    async function selectCapture() {
+        const value = await modal("캡처", "캡처방식을 선택하세요", {
+            capture: "데스크탑 화면",
+            stream: "이미지 스트리밍",
+            user: "카메라(전면)",
+            environment: "카메라(후면)"
         })
+        if (value === 'capture') startCapture()
+        else if (value === 'user') startCamera('user')
+        else if (value === 'environment') startCamera('environment')
+        else if (value === 'stream') {
+            const url = prompt("스트리밍 서버 URL을 입력하세요.", streamURL)
+            if (url === null) {
+                toast("입력을 취소했습니다.")
+                return
+            }
+            toast(`${url} 주소로 스트리밍을 시작합니다.`)
+            startStream(url)
+        }
     }
 
 
-    function selectCapture() {
-        Swal.fire({
-            title: '캡처방식을 선택하세요.',
-            input: 'select',
-            inputOptions: {
-                capture: '데스크탑 화면',
-                stream: '이미지 스트리밍',
-                user: '카메라(전면)',
-                environment: '카메라(후면)'
-            },
-            showCancelButton: false
-        }).then(input => {
-            const value = input.value
-            if (value === 'capture') {
-                startCapture()
-            } else if (value === 'stream') {
-                Swal.fire({
-                    input: 'text',
-                    inputLabel: '스트리밍 서버 URL을 입력하세요.',
-                    inputValue: streamURL
-                }).then(url => {
-                    if (url.isConfirmed) {
-                        startStream(url.value)
-                    } else {
-                        console.log('입력이 취소되었습니다.')
-                    }
-                })
-            } else if (value == 'user') {
-                startCamera('user')
-            } else if (value == 'environment') {
-                startCamera('environment')
-            }
+    async function selectOption() {
+        const value = await modal("기능 선택", "실행할 기능을 선택하세요.", {
+            capture: "캡처 저장",
+            fps: "FPS 변경",
+            roi: "ROI 보기",
+            slot: "슬롯 보기",
+            input: "입력 테스트"
         })
+        if (value === 'capture') saveCap()
+        else if (value === 'fps') selectFPS()
+        else if (value === 'roi') selectROI()
+        else if (value === 'input') inputTest()
     }
 
-    function selectOption() {
-        Swal.fire({
-            title: '실행할 기능을 선택하세요.',
-            input: 'select',
-            inputOptions: {
-                capture: '캡처 저장',
-                fps: 'FPS 변경',
-                roi: 'ROI 보기',
-                slot: '슬롯상태 보기'
-            },
-            showCancelButton: true
-        }).then(result => {
-            const value = result.value
-            if (value === 'roi') {
-                selectView()
-            } else if (value === 'capture') {
-                saveCap()
-            } else if (value === 'fps') {
-                selectFPS()
-            }
-        })
+
+    function selectROI() {
+        const v = prompt(`ROI 영역을 입력하세요.\n현재 캡처: ${cap.width}x${cap.height}`, ROI.join(', '))
+        const n = v.trim().split(/\s*,\s*/).map(Number)
+        if (n.length !== 4 || !n.every(Number.isFinite) || n[0] >= n[2] || n[1] >= n[3]) {
+            toast('잘못된 ROI 입력입니다.')
+            return
+        }
+        ROI = n
+        viewMode = 'roi'
+        console.log('ROI:', ROI)
     }
 
 
     function selectFPS() {
-        Swal.fire({
-            title: '적용할 FPS를 입력하세요',
-            input: 'number',
-            inputAttributes: {
-                min: '1',
-                max: '30',
-                step: '1'
-            },
-            showCancelButton: true,
-            inputValidator: (value) => {
-                const num = Number(value)
-                if (!value || !Number.isInteger(num)) {
-                    return '숫자만 입력하세요.'
-                }
-                if (num < 1 || num > 30) {
-                    return '1~30구간의 값을 입력하세요.'
-                }
-            }
-        }).then((result) => {
-            if (result.isConfirmed) {
-                fps = Number(result.value)
-                frameRate(fps)
-            }
-        })
+        const value = prompt("적용할 FPS를 입력하세요. (1~60 사이)")
+        const num = Number(value)
+        if (!value || !Number.isInteger(num)) {
+            toast("숫자만 입력하세요.")
+            return
+        }
+        if (num < 1 || num > 60) {
+            toast("1~60 사이의 값을 입력하세요")
+            return
+        }
+        frameRate(num)
     }
 
 
-    function selectSlot() {
-        Swal.fire({
-            title: '사용할 기능을 선택하세요.',
-            input: 'select',
-            inputOptions: {
-                add: '파일 추가하기',
-                save: '저장하기',
-                load: '불러오기'
-            },
-            showCancelButton: true
-        }).then(result => {
-            if (result.isConfirmed) {
-                const value = result.value
-                if (value === 'add') {
-                    addFiles()
-                } else if (value === 'save') {
-                    saveImgToStorage()
-                        .then(() => saveTxtToStorage())
-                        .then(() => report('save'))
-                } else if (value === 'load') {
-                    loadImgFromStorage()
-                        .then(() => loadTxtFromStorage())
-                        .then(() => report('load'))
-                }
-            }
-        })        
+    async function selectSlot() {
+        const value = await modal("기능 선택", "사용할 기능을 선택하세요.", {
+            add: '파일 추가하기',
+            save: '저장하기',
+            load: '불러오기'
+        })
+        if (value === 'add') {
+            addFiles()
+        } else if (value === 'save') {
+            saveImgToStorage()
+                .then(() => saveTxtToStorage())
+                .then(() => report('save'))
+        } else if (value === 'load') {
+            loadImgFromStorage()
+                .then(() => loadTxtFromStorage())
+                .then(() => report('load'))
+        }
     }
 
 
     function startStream(url) {
-        cap = createImg(url, '', 'anonymous', () => {
+        cap = createImg('', '')
+        cap.elt.crossOrigin = 'anonymous'
+        cap.elt.onload = () => {
             localStorage.setItem('stream_url', url)
             onCapReady()
-        })
+        }
+        cap.elt.onerror = err => {
+            toast('스트림 연결에 실패했습니다.')
+            cap = undefined
+        }
+        cap.elt.src = url
     }
 
 
@@ -422,13 +420,13 @@
         const lenImg = Object.keys(imgObj).length
         const lenTxt = Object.keys(slots).length
         if (type === 'load') {
-            if (lenImg && lenTxt) notify(`이미지 ${lenImg}개, 텍스트 ${lenTxt}개 로드 완료.`)
-            else if (lenImg) notify(`이미지 ${lenImg}개 로드 완료.`)
-            else if (lenTxt) notify(`텍스트 ${lenTxt}개 로드 완료.`)
+            if (lenImg && lenTxt) toast(`이미지 ${lenImg}개, 텍스트 ${lenTxt}개 로드 완료.`)
+            else if (lenImg) toast(`이미지 ${lenImg}개 로드 완료.`)
+            else if (lenTxt) toast(`텍스트 ${lenTxt}개 로드 완료.`)
         } else if (type === 'save') {
-            if (lenImg && lenTxt) notify(`이미지 ${lenImg}개, 텍스트 ${lenTxt}개 저장 완료.`)
-            else if (lenImg) notify(`이미지 ${lenImg}개 저장 완료.`)
-            else if (lenTxt) notify(`텍스트 ${lenTxt}개 저장 완료.`)
+            if (lenImg && lenTxt) toast(`이미지 ${lenImg}개, 텍스트 ${lenTxt}개 저장 완료.`)
+            else if (lenImg) toast(`이미지 ${lenImg}개 저장 완료.`)
+            else if (lenTxt) toast(`텍스트 ${lenTxt}개 저장 완료.`)
         }
     }
 
@@ -615,7 +613,7 @@
 
 
     function saveCap() {
-        if (!cap) return error('캡처된 영상이 없습니다.')
+        if (!cap) return toast('캡처된 영상이 없습니다.')
         const [x1, y1, x2, y2] = ROI
         const roi = viewMode === 'roi'
         const w = roi ? x2 - x1 : cap.width

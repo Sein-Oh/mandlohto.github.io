@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/npm/jsframe.js/lib/jsframe.min.js"></script>
+<style>
+	button {
+		width: 95%;
+		height: 30px;
+		margin: 5px;
+		background-color: #7066E0;
+		border-radius: 5px;
+		border: none;
+		color: white;
+	}
+	
+	button:hover {
+            background-color: rgb(100.1092391304, 89.2777173913, 221.4222826087);
+	}
+
+	button:disabled {
+		background-color: gray
+	}
+	
+</style>
+</head>
+<body>
+</body>
+<script>
+	const jsFrame = new JSFrame()
+	jsFrame.showToast({html:'Start', align:'center'})
+	
+	function makeModal(title, names) {
+		return new Promise(resolve => {
+			const htmlStr = names.map(name => `<button id=${name}>${name}</button>`).join('')
+			const frame = jsFrame.create({
+				title: title,
+				left: 20,
+				top: 20,
+				width: 200,
+				height: (40 * names.length)+25,
+				html: htmlStr,
+			})
+			for (name of names) {
+				frame.on(`#${name}`, 'click', (_frame, evt) => {
+					_frame.closeFrame()
+					resolve(name)
+				})
+			}
+			frame.on('closeButton', 'click', () => resolve(false))
+			frame.showModal()
+		})
+	}
+	
+</script>
+</html>

@@ -3,41 +3,45 @@
 <head>
 <script src="https://cdn.jsdelivr.net/npm/jsframe.js/lib/jsframe.min.js"></script>
 <style>
-	button {
-		width: 95%;
+	.container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+	}
+	
+	.container button {
+		width: 80%;
 		height: 30px;
-		margin: 5px;
-		background-color: #7066E0;
-		border-radius: 5px;
-		border: none;
-		color: white;
 	}
-	
-	button:hover {
-            background-color: rgb(100.1092391304, 89.2777173913, 221.4222826087);
-	}
-
-	button:disabled {
-		background-color: gray
-	}
-	
 </style>
 </head>
 <body>
 </body>
 <script>
 	const jsFrame = new JSFrame()
-	jsFrame.showToast({html:'Start', align:'center'})
 	
-	function makeModal(title, names) {
+	
+	function toast (msg) {
+		jsFrame.showToast({html: msg, align:'center'})
+	}
+	
+	
+	function modal(title, msg, names) {
 		return new Promise(resolve => {
-			const htmlStr = names.map(name => `<button id=${name}>${name}</button>`).join('')
+			let htmlStr = '<div class="container">'
+			htmlStr += `<div style='font-size:14px;margin-top:5px;'>${msg}</div>`
+			for (name of names) {
+				htmlStr += `<button id=${name}>${name}</button>`
+			}
+			htmlStr += '</div>'
 			const frame = jsFrame.create({
 				title: title,
 				left: 20,
 				top: 20,
-				width: 200,
-				height: (40 * names.length)+25,
+				width: 300,
+				height: (40 * names.length)+55,
 				html: htmlStr,
 			})
 			for (name of names) {

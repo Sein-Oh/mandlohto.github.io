@@ -1,1032 +1,143 @@
 <!DOCTYPE html>
-<html lang='ko'>
+<html>
 
 <head>
-    <meta charset='UTF-8'>
-    <title>만들오토 v1.6 (2026.05.27)</title>
-    <script src='https://cdn.jsdelivr.net/npm/lil-gui@0.21'></script>
+    <meta charset='utf-8' />
+    <title>만들오토 v2.0 (2026.06.13)</title>
+    <script src='https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsframe.js/lib/jsframe.min.js"></script>
     <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
-    <script src='capture.js'></script>
     <script src='webserial.js'></script>
     <style>
-        .lil-gui {
-            --name-width: 60%;
+        * {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #7066E0;
+            border-radius: 5px;
+            border: none;
+            color: white;
+            font-weight: 500;
+            z-index: -1;
+        }
+
+        button:hover {
+            background-color: rgb(100.1092391304, 89.2777173913, 221.4222826087);
+        }
+
+        button:disabled {
+            background-color: gray
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .slotContainer {
+            height: auto;
+            width: 320px;
+            max-height: 400px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .container button {
+            width: 80%;
+            height: 30px;
+            z-index: 999;
         }
     </style>
 </head>
 
 <body>
 </body>
-
 <script>
+    let cnv, cap, capForSave
     let inputURL, streamURL
+    let btnCapture, btnInput, btnSlot, btnOption
+    let slotContainer
 
+    let viewMode = 'preview'
+    let inputMode = undefined
+    let ROI = []
+    let ratio = 1
+
+    let timerBusy = false
+    let imgBusy = false
+    let scriptBusy = false
+    let requestBusy = false
+
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
     const canvasCrop = document.createElement('canvas')
     const ctxCrop = canvasCrop.getContext('2d', { willReadFrequently: true })
+
+
+    const jsFrame = new JSFrame()
+
+
+    function toast(msg) {
+        jsFrame.showToast({ html: msg, align: 'center' })
+    }
+
+
+    function modal(title, msg, buttons) {
+        return new Promise(resolve => {
+            const entries = Object.entries(buttons)
+            const width = 300
+            const height = (40 * entries.length) + 55
+            let htmlStr = '<div class="container">'
+            htmlStr += `<div style="font-size:14px;margin-top:5px;">${msg}</div>`
+            for (const [key, label] of entries) {
+                htmlStr += `<button id="${key}">${label}</button>`
+            }
+            htmlStr += '</div>'
+            const frame = jsFrame.create({
+                title,
+                left: (window.innerWidth - width) / 2,
+                top: (window.innerHeight - height) / 2,
+                width,
+                height,
+                html: htmlStr
+            })
+            console.log(frame.$frame)
+            for (const [key] of entries) {
+                frame.on(`#${key}`, 'click', (_frame) => {
+                    _frame.closeFrame()
+                    resolve(key)
+                })
+            }
+            frame.on('closeButton', 'click', () => resolve(false))
+            frame.showModal()
+        })
+    }
+
+
+    const serial = new WebSerialManager()
 
     const slots = {}
     const slotTexts = {}
     const imgObj = {}
     const imgMatObj = {}
 
+    const cnvWidth = 320
 
-    const target_width = 320
-    const cap = new Capture()
-    const serial = new WebSerialManager()
-
-
-    const gui = new lil.GUI({ title: 'Mandlauto' })
-    const folderCapture = gui.addFolder('Capture')
-    const folderInput = gui.addFolder('Input')
-
-    const folderSlot = gui.addFolder('Slot')
-
-    const folderTool = gui.addFolder('Tools').close()
-    const folderPos = folderTool.addFolder('GUI Position').close()
-    const folderForm = folderTool.addFolder('Download Form').close()
-    const folderInfo = folderTool.addFolder('Information').close()
-
-
-
-    const guiObj = {
-        captureMode: 'None',
-        fps: 5,
-        viewMode: 'Capture',
-        roi: 'x1, y1, x2, y2',
-        inputMode: 'None',
-        testCMD: '',
-        loopTime: 0,
-        guiToTop: () => {
-            moveGUI(0, 0, target_width)
-        },
-        guiToBottom: () => {
-            const ratio = cap.width / target_width
-            moveGUI(0, (cap.height / ratio) + 5, target_width)
-        },
-        guiToTopRight: () => {
-            moveGUI(target_width + 5, 0, target_width)
-        },
-        captureROI: () => {
-            const roiValue = guiObj.roi.split(',').map(v => Number(v.trim()))
-            const fileName = `${getTimestamp()}_capture_${roiValue.toString()}.jpg`
-            cap.saveFrame(roiValue[0], roiValue[1], roiValue[2], roiValue[3], fileName)
-        },
-        captureFrame: () => {
-            const fileName = `${getTimestamp()}_capture.jpg`
-            cap.saveFrame(0, 0, cap.width, cap.height, fileName)
-        },
-        addImg: () => { addImg() },
-        addTxt: () => { addTxt() },
-        formTimer: () => {
-            const text = `type: timer\nkey : \ncooltime :`
-            downloadTextFile('Form_Timer', text)
-        },
-        formImg: () => {
-            const text = `type : img\nkey : \nimg : \ncooltime : \nx1 :\ny1 :\nx2 :\ny2 : \nthreshold : 0.8\nscale : 0.5`
-            downloadTextFile('Form_Image', text)
-        },
-        formScript: () => {
-            const text = `type : script\nkey : \nslots : \ncooltime : `
-            downloadTextFile('Form_Script', text)
-        },
-        formRequestInfo: () => {
-            const text = `type : requestInfo\nurl : \ncooltime : `
-            downloadTextFile('Form_RequestInfo', text)
-        },
-        saveData: () => {
-            saveImagesToStorage()
-            saveTxtToStorage()
-            alert('Data saved to localStorage.')
-        },
-        loadData: () => {
-            loadImagesFromStorage().then(() => {
-                loadTxtFromStorage()
-            })
-        }
-    }
-
-
-    const captureSelect = folderCapture.add(guiObj, 'captureMode')
-        .name('Capture Mode')
-        .options(['Desktop', 'Streaming'])
-        .onChange((value) => {
-            if (value === 'Desktop') startCapture()
-            else if (value === 'Streaming') startStream()
-        })
-
-
-    const fpsSelect = folderCapture.add(guiObj, 'fps')
-        .name('FPS')
-        .options([1, 2, 3, 5, 10])
-        .onChange((value) => {
-            console.log(value)
-        })
-
-
-    const resetROI = () => {
-        if (cap.onStream) {
-            roiInput.setValue(`0, 0, ${cap.width}, ${cap.height}`)
-        } else {
-            roiInput.setValue(`x1, y1, x2, y2`)
-        }
-    }
-
-
-    const viewSelect = folderCapture.add(guiObj, 'viewMode')
-        .name('View Mode')
-        .options(['Capture', 'ROI'])
-        .onChange((value) => {
-            if (value === 'ROI') {
-                roiInput.show()
-                captureROIBtn.show()
-                resetROI()
-            }
-            else {
-                cap.draw.clearRect(0, 0, cap.width, cap.height)
-                roiInput.hide()
-                captureROIBtn.hide()
-            }
-        })
-        .disable()
-
-
-    const roiInput = folderCapture.add(guiObj, 'roi')
-        .name('ROI')
-        .onFinishChange((value) => {
-            const roiValue = value.split(',').map(v => Number(v.trim()))
-            if (roiValue.some(v => Number.isNaN(v))) {
-                console.log('ROI parsing error. (NaN)')
-                resetROI()
-                return
-            }
-            if (roiValue.length != 4) {
-                console.log('ROI parsing error. (Length)')
-                resetROI()
-                return
-            }
-            if (roiValue[0] >= roiValue[2] || roiValue[1] >= roiValue[3]) {
-                console.log('ROI parsing error. (Value)')
-                resetROI()
-                return
-            }
-            cap.draw.clearRect(0, 0, cap.width, cap.height)
-            cap.draw.strokeStyle = '#0000FF'
-            cap.draw.strokeRect(roiValue[0], roiValue[1], roiValue[2] - roiValue[0], roiValue[3] - roiValue[1])
-        })
-        .hide()
-
-
-    const captureROIBtn = folderCapture.add(guiObj, 'captureROI').name('Capture ROI Frame').hide()
-
-    folderCapture.add(guiObj, 'captureFrame').name('Capture Frame')
-
-    const inputSelect = folderInput.add(guiObj, 'inputMode')
-        .name('Input Mode')
-        .options(['Serial', 'Server'])
-        .onChange(async (value) => {
-            if (value === 'Serial') {
-                await serial.connect()
-                if (serial.isConnected) inputSelect.disable()
-            } else if (value === 'Server') {
-                inputURL = prompt('Input URL : ', inputURL)
-                localStorage.setItem('inputURL', inputURL)
-            }
-        })
-
-
-    const inputTest = folderInput.add(guiObj, 'testCMD')
-        .name('Test Command')
-        .onFinishChange(async (value) => {
-            inputTest.setValue('')
-            await send_keys(value)
-        })
-
-
-    const addImgBtn = folderSlot.add(guiObj, 'addImg').name('Add Images. (0)')
-    const addTxtBtn = folderSlot.add(guiObj, 'addTxt').name('Add Slot Files. (0)')
-    const sampleTimerBtn = folderForm.add(guiObj, 'formTimer').name('Timer')
-    const sampleImgBtn = folderForm.add(guiObj, 'formImg').name('Image')
-    const sampleScriptBtn = folderForm.add(guiObj, 'formScript').name('Script')
-    const sampleRequestInfoBtn = folderForm.add(guiObj, 'formRequestInfo').name('Request Information')
-
-
-    folderPos.add(guiObj, 'guiToTop').name('Top')
-    folderPos.add(guiObj, 'guiToTopRight').name('Top Right')
-    folderPos.add(guiObj, 'guiToBottom').name('Bottom')
-
-    const loopTime = folderInfo.add(guiObj, 'loopTime').name('Loop Time (ms)')
-
-    folderTool.add(guiObj, 'saveData').name('Save Data to Storage')
-    folderTool.add(guiObj, 'loadData').name('Load Data from Storage')
-
-
-    const wait = msec => {
-        return new Promise(resolve => {
-            setTimeout(resolve, msec)
-        })
-    }
-
-
-    const writeKey = (key) => {
-        if (guiObj.inputMode === 'Serial' && serial.isConnected) {
-            serial.send(key)
-            console.log(`Serial send : ${key}`)
-        } else if (guiObj.inputMode === 'Server') {
-            if (key.includes(',')) {
-                const [x, y] = key.split(',').map(Number)
-                fetch(`${inputURL}?cmd=click&x=${x}&y=${y}`)
-            } else {
-                fetch(`${inputURL}?cmd=write&key=${key}`)
-            }
-            // const url = `${inputURL.endsWith('/') || inputURL.endsWith('=') ? inputURL : inputURL + '/'}${key}`
-            // fetch(url)
-            console.log(`Server send : ${key}`)
-        } else {
-            console.log(`Not connected. ${key}`)
-        }
-    }
-
-
-    const send_keys = async (keys, type = 'none', name = 'none') => {
-        for (const key of keys.split(' ')) {
-            if (key.indexOf('-') === 0) {
-                const argument = Number(key.slice(1))
-                await wait(argument * 1000)
-            } else if (key.indexOf('@') === 0) {
-                //Magic key
-                const argument = key.slice(1)
-                if (argument.includes('click@') && type === 'img' && name != 'none') {
-                    const idx = argument.indexOf('@')
-                    const argu = Number(argument.slice(idx + 1))
-                    const result = slots[name].result
-                    const magicKey = `${Math.round(result.cx * argu)},${Math.round(result.cy * argu)}`
-                    writeKey(magicKey)
-                } else {
-                    if (argument === 'capture') {
-                        const fileName = `${getTimestamp()}_capture.jpg`
-                        cap.saveFrame(0, 0, cap.width, cap.height, fileName)
-                    } else if (argument === 'click' && type === 'img' && name != 'none') {
-                        const result = slots[name].result
-                        const magicKey = `${result.cx},${result.cy}`
-                        writeKey(magicKey)
-                    }
-                }
-            } else {
-                writeKey(key)
-            }
-        }
-    }
-
-
-    const moveGUI = (x, y, width) => {
-        gui.domElement.style.position = 'fixed'
-        gui.domElement.style.width = `${width}px`
-        gui.domElement.style.top = `${y}px`
-        gui.domElement.style.left = `${x}px`
-        gui.domElement.style.right = 'auto'
-    }
-
-
-    const adjustCap = () => {
-        const ratio = cap.width / target_width
-        cap.apply()
-        cap.setSize(cap.width / ratio, cap.height / ratio)
-        cap.setPosition(0, 0)
-        moveGUI(0, (cap.height / ratio) + 5, target_width)
-        captureSelect.disable()
-        viewSelect.enable()
-        roiInput.setValue(`0, 0, ${cap.width}, ${cap.height}`)
-    }
-
-
-    const startCapture = () => {
-        cap.fromCapture().then(() => {
-            adjustCap()
-        })
-    }
-
-
-    const startStream = () => {
-        const url = prompt('Stream URL : ', streamURL)
-        cap.fromURL(url).then(() => {
-            adjustCap()
-            localStorage.setItem('streamURL', url)
-        })
-    }
-
-
-    const cvLoaded = () => {
-        cv.onRuntimeInitialized = () => {
-            console.log('opencv.js loaded.')
-            console.log('Start Loop.')
-            loop()
-        }
-    }
-
-
-    function addImg() {
-        const input = document.createElement('input')
-        input.type = 'file'
-        input.accept = 'image/*'
-        input.multiple = true
-
-        input.onchange = async e => {
-            const files = Array.from(e.target.files)
-            const tasks = files.map(file => {
-                return new Promise(resolve => {
-                    const name = file.name
-                    const key = name.split('.')[0]
-                    const url = URL.createObjectURL(file)
-                    imgObj[key] = url
-                    const img = new Image()
-                    img.onload = () => {
-                        const src = cv.imread(img)
-                        const gray = new cv.Mat()
-                        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
-                        imgMatObj[key] = gray.clone()
-                        src.delete()
-                        gray.delete()
-                        resolve()
-                    }
-                    img.src = url
-                })
-            })
-            await Promise.all(tasks)
-            addImgBtn.name(`Add Images. (${Object.keys(imgObj).length})`)
-        }
-        input.click()
-    }
-
-
-    function urlToBase64(url) {
-        return new Promise(resolve => {
-            const img = new Image()
-
-            img.onload = () => {
-                const canvas = document.createElement('canvas')
-                canvas.width = img.width
-                canvas.height = img.height
-
-                const ctx = canvas.getContext('2d')
-                ctx.drawImage(img, 0, 0)
-
-                resolve(canvas.toDataURL('image/png'))
-            }
-
-            img.src = url
-        })
-    }
-
-
-    async function saveImagesToStorage() {
-        const data = {}
-
-        for (const [key, url] of Object.entries(imgObj)) {
-            data[key] = await urlToBase64(url)
-        }
-
-        localStorage.setItem('images', JSON.stringify(data))
-    }
-
-
-    async function loadImagesFromStorage() {
-        const json = localStorage.getItem('images')
-
-        if (!json) return
-
-        const data = JSON.parse(json)
-
-        const tasks = Object.entries(data).map(([key, base64]) => {
-            return new Promise(resolve => {
-                imgObj[key] = base64
-
-                const img = new Image()
-
-                img.onload = () => {
-                    const src = cv.imread(img)
-
-                    const gray = new cv.Mat()
-                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
-
-                    if (imgMatObj[key]) {
-                        imgMatObj[key].delete()
-                    }
-
-                    imgMatObj[key] = gray.clone()
-
-                    src.delete()
-                    gray.delete()
-
-                    resolve()
-                }
-
-                img.src = base64
-            })
-        })
-
-        await Promise.all(tasks)
-
-        addImgBtn.name(`Add Images. (${Object.keys(imgObj).length})`)
-    }
-
-    async function saveTxtToStorage() {
-
-        const saveData = {}
-
-        Object.keys(slotTexts).forEach(key => {
-            saveData[key] = slotTexts[key]
-        })
-
-        localStorage.setItem(
-            'slotFiles',
-            JSON.stringify(saveData)
-        )
-    }
-
-    function parseSlotText(name, text) {
-
-        // For GUI checkbox.
-        guiObj[name] = false
-
-        const lines = text.split('\n')
-
-        const data = {}
-
-        data.cooling = false
-        data.run = false
-
-        lines.forEach(line => {
-
-            console.log(line)
-
-            let [key, value] = line
-                .split(':')
-                .map(v => v.trim())
-
-            if (key == 'url') {
-                const idx = line.indexOf(':')
-                value = line.slice(idx + 1).trim()
-            }
-
-            if (key === 'img') {
-
-                const imgs = value
-                    .split(' ')
-                    .map(v => v.trim().toLowerCase())
-
-                data.img = []
-
-                data.img.push(...imgs)
-
-                data.mats = data.img.map(
-                    v => imgMatObj[v.split('.')[0]]
-                )
-
-                data.scale =
-                    typeof (data.scale) == 'undefined'
-                        ? 0.5
-                        : Number(data.scale)
-
-                data.result = {
-                    value: 0,
-                    cx: 0,
-                    cy: 0,
-                    bool: false
-                }
-
-            } else {
-
-                data[key] = value
-            }
-        })
-
-        slots[name] = data
-    }
-
-    function validateSlots() {
-
-        for (const key of Object.keys(slots)) {
-
-            if (slots[key].type === undefined) {
-
-                console.log('Type not defined.')
-
-                delete slots[key]
-
-                return false
-
-            } else {
-
-                if (slots[key].type === 'timer') {
-
-                    const checker = ['key', 'cooltime']
-
-                    for (const check of checker) {
-
-                        if (slots[key].hasOwnProperty(check) === false) {
-
-                            console.error(`There is no ${check} at ${key}`)
-
-                            delete slots[key]
-
-                            return false
-                        }
-
-                        if (
-                            slots[key][check] === undefined
-                            || slots[key][check] === ''
-                        ) {
-
-                            console.error(`There is no value of ${key}-${check}`)
-
-                            delete slots[key]
-
-                            return false
-                        }
-                    }
-                }
-
-                if (slots[key].type === 'img') {
-
-                    const checker = [
-                        'key',
-                        'img',
-                        'cooltime',
-                        'x1',
-                        'x2',
-                        'y1',
-                        'y2',
-                        'threshold'
-                    ]
-
-                    for (const check of checker) {
-
-                        if (slots[key].hasOwnProperty(check) === false) {
-
-                            console.error(`There is no ${check} at ${key}`)
-
-                            delete slots[key]
-
-                            return false
-                        }
-
-                        if (
-                            slots[key][check] === undefined
-                            || slots[key][check] === ''
-                        ) {
-
-                            console.error(`There is no value of ${key}-${check}`)
-
-                            delete slots[key]
-
-                            return false
-                        }
-                    }
-
-                    for (const i of slots[key].img) {
-
-                        if (imgMatObj[i.split('.')[0]] === undefined) {
-
-                            console.error(`ImageSlot ${key} Mat Error.`)
-
-                            delete slots[key]
-
-                            return false
-                        }
-                    }
-                }
-
-                if (slots[key].type === 'script') {
-
-                    const checker = [
-                        'key',
-                        'slots',
-                        'cooltime'
-                    ]
-
-                    for (const check of checker) {
-
-                        if (slots[key].hasOwnProperty(check) === false) {
-
-                            console.error(`There is no ${check} at ${key}`)
-
-                            delete slots[key]
-
-                            return false
-                        }
-
-                        if (
-                            slots[key][check] === undefined
-                            || slots[key][check] === ''
-                        ) {
-
-                            console.error(`There is no value of ${key}-${check}`)
-
-                            delete slots[key]
-
-                            return false
-                        }
-
-                        for (
-                            const s of slots[key]
-                                .slots
-                                .split(' ')
-                                .filter(Boolean)
-                        ) {
-
-                            if (
-                                slots[s.replace('!', '')]
-                                === undefined
-                            ) {
-
-                                console.error(`Script ${key} slots Error.`)
-
-                                delete slots[key]
-
-                                return false
-                            }
-                        }
-                    }
-
-                    slots[key].result = false
-                }
-
-                if (slots[key].type === 'requestInfo') {
-
-                    const checker = ['url', 'cooltime']
-
-                    for (const check of checker) {
-
-                        if (slots[key].hasOwnProperty(check) === false) {
-
-                            console.error(`There is no ${check} at ${key}`)
-
-                            delete slots[key]
-
-                            return false
-                        }
-
-                        if (
-                            slots[key][check] === undefined
-                            || slots[key][check] === ''
-                        ) {
-
-                            console.error(`There is no value of ${key}-${check}`)
-
-                            delete slots[key]
-
-                            return false
-                        }
-                    }
-                }
-            }
-        }
-
-        return true
-    }
-
-    function refreshSlotGUI() {
-
-        addTxtBtn.name(
-            `Add Slot Files. (${Object.keys(slots).length})`
-        )
-
-        Object.keys(slots).forEach(key => {
-
-            if (
-                folderSlot.controllers.find(
-                    c => c.property === key
-                ) === undefined
-            ) {
-
-                folderSlot
-                    .add(guiObj, key)
-                    .name(`🔘 ${key}`)
-                    .onChange(value => {
-                        slots[key].run = value
-                    })
-
-                const opt = ['Capture', 'ROI']
-
-                Object.keys(slots).forEach(key => {
-
-                    if (slots[key]['type'] == 'img') {
-                        opt.push(key)
-                    }
-                })
-
-                viewSelect.options(opt)
-            }
-        })
-    }
-
-    async function loadTxtFromStorage() {
-
-        const json = localStorage.getItem('slotFiles')
-
-        if (!json) return
-
-        const data = JSON.parse(json)
-
-        Object.entries(data).forEach(([name, text]) => {
-
-            slotTexts[name] = text
-
-            parseSlotText(name, text)
-        })
-
-        if (validateSlots() === false) {
-            return
-        }
-
-        refreshSlotGUI()
-    }
-
-    function addTxt() {
-
-        const input = document.createElement('input')
-
-        input.type = 'file'
-
-        input.accept = '.txt'
-
-        input.multiple = true
-
-        input.onchange = async e => {
-
-            const files = Array.from(e.target.files)
-
-            const tasks = files.map(file => {
-
-                return new Promise(resolve => {
-
-                    const reader = new FileReader()
-
-                    reader.onload = event => {
-
-                        const name = file.name.replace('.txt', '')
-
-                        const text = event.target.result
-
-                        slotTexts[name] = text
-
-                        parseSlotText(name, text)
-
-                        resolve()
-                    }
-
-                    reader.readAsText(file)
-                })
-            })
-
-            await Promise.all(tasks)
-
-            if (validateSlots() === false) {
-                return
-            }
-
-            await saveTxtToStorage()
-
-            refreshSlotGUI()
-        }
-
-        input.click()
-    }
-
-
-    function parseSlotText(name, text) {
-        // For GUI checkbox.
-        guiObj[name] = false
-
-        const lines = text.split('\n')
-
-        const data = {}
-        data.cooling = false
-        data.run = false
-
-        lines.forEach(line => {
-            console.log(line)
-
-            let [key, value] = line.split(':').map(v => v.trim())
-
-            if (key == 'url') {
-                const idx = line.indexOf(':')
-                value = line.slice(idx + 1).trim()
-            }
-
-            if (key === 'img') {
-                const imgs = value
-                    .split(' ')
-                    .map(v => v.trim().toLowerCase())
-
-                data.img = []
-
-                data.img.push(...imgs)
-
-                data.mats = data.img.map(
-                    v => imgMatObj[v.split('.')[0]]
-                )
-
-                data.scale =
-                    typeof (data.scale) == 'undefined'
-                        ? 0.5
-                        : Number(data.scale)
-
-                data.result = {
-                    value: 0,
-                    cx: 0,
-                    cy: 0,
-                    bool: false
-                }
-
-            } else {
-                data[key] = value
-            }
-        })
-
-        slots[name] = data
-    }
-
-
-    function validateSlots() {
-        for (const key of Object.keys(slots)) {
-
-            if (slots[key].type === undefined) {
-                console.log('Type not defined.')
-                delete slots[key]
-                return false
-            }
-
-            else {
-
-                if (slots[key].type === 'timer') {
-
-                    const checker = ['key', 'cooltime']
-
-                    for (const check of checker) {
-
-                        if (slots[key].hasOwnProperty(check) === false) {
-                            console.error(`There is no ${check} at ${key}`)
-                            delete slots[key]
-                            return false
-                        }
-
-                        if (slots[key][check] === undefined || slots[key][check] === '') {
-                            console.error(`There is no value of ${key}-${check}`)
-                            delete slots[key]
-                            return false
-                        }
-                    }
-                }
-
-                if (slots[key].type === 'img') {
-
-                    const checker = [
-                        'key',
-                        'img',
-                        'cooltime',
-                        'x1',
-                        'x2',
-                        'y1',
-                        'y2',
-                        'threshold'
-                    ]
-
-                    for (const check of checker) {
-
-                        if (slots[key].hasOwnProperty(check) === false) {
-                            console.error(`There is no ${check} at ${key}`)
-                            delete slots[key]
-                            return false
-                        }
-
-                        if (slots[key][check] === undefined || slots[key][check] === '') {
-                            console.error(`There is no value of ${key}-${check}`)
-                            delete slots[key]
-                            return false
-                        }
-                    }
-
-                    for (const i of slots[key].img) {
-
-                        if (imgMatObj[i.split('.')[0]] === undefined) {
-                            console.error(`ImageSlot ${key} Mat Error.`)
-                            delete slots[key]
-                            return false
-                        }
-                    }
-                }
-
-                if (slots[key].type === 'script') {
-
-                    const checker = ['key', 'slots', 'cooltime']
-
-                    for (const check of checker) {
-
-                        if (slots[key].hasOwnProperty(check) === false) {
-                            console.error(`There is no ${check} at ${key}`)
-                            delete slots[key]
-                            return false
-                        }
-
-                        if (slots[key][check] === undefined || slots[key][check] === '') {
-                            console.error(`There is no value of ${key}-${check}`)
-                            delete slots[key]
-                            return false
-                        }
-
-                        for (const s of slots[key].slots.split(' ').filter(Boolean)) {
-
-                            if (slots[s.replace('!', '')] === undefined) {
-                                console.error(`Script ${key} slots Error.`)
-                                delete slots[key]
-                                return false
-                            }
-                        }
-                    }
-
-                    slots[key].result = false
-                }
-
-                if (slots[key].type === 'requestInfo') {
-
-                    const checker = ['url', 'cooltime']
-
-                    for (const check of checker) {
-
-                        if (slots[key].hasOwnProperty(check) === false) {
-                            console.error(`There is no ${check} at ${key}`)
-                            delete slots[key]
-                            return false
-                        }
-
-                        if (slots[key][check] === undefined || slots[key][check] === '') {
-                            console.error(`There is no value of ${key}-${check}`)
-                            delete slots[key]
-                            return false
-                        }
-                    }
-                }
-            }
-        }
-
-        return true
-    }
-
-
-    function refreshSlotGUI() {
-
-        addTxtBtn.name(
-            `Add Slot Files. (${Object.keys(slots).length})`
-        )
-
-        Object.keys(slots).forEach(key => {
-
-            if (
-                folderSlot.controllers.find(
-                    c => c.property === key
-                ) === undefined
-            ) {
-
-                folderSlot
-                    .add(guiObj, key)
-                    .name(`🔘 ${key}`)
-                    .onChange(value => {
-                        slots[key].run = value
-                    })
-
-                const opt = ['Capture', 'ROI']
-
-                Object.keys(slots).forEach(key => {
-
-                    if (slots[key]['type'] == 'img') {
-                        opt.push(key)
-                    }
-                })
-
-                viewSelect.options(opt)
-            }
-        })
-    }
-
-
-    async function saveTxtToStorage() {
-
-        const saveData = {}
-
-        Object.keys(slotTexts).forEach(key => {
-            saveData[key] = slotTexts[key]
-        })
-
-        localStorage.setItem(
-            'slotFiles',
-            JSON.stringify(saveData)
-        )
-    }
-
-
-
-    const getTimestamp = () => {
+    function getTimestamp() {
         let now = new Date()
         let YY = String(now.getFullYear()).slice(-2)
         let MM = String(now.getMonth() + 1).padStart(2, '0')
@@ -1038,48 +149,126 @@
     }
 
 
-    const downloadTextFile = (filename, content) => {
-        const blob = new Blob([content], {
-            type: 'text/plain;charset=utf-8'
-        })
+    function setup() {
+        frameRate(10)
+        pixelDensity(1)
+        cnv = createCanvas(cnvWidth, 180)
+        cnv.position(5, 5)
+        cnv.style('z-index', '-1')
+        cnv.style('border-radius', '5px')
+        capForSave = createGraphics(cnvWidth, 180)
+        background(0)
 
-        const url = URL.createObjectURL(blob)
+        btnCapture = createButton('캡처시작')
+        btnCapture.size(78, 25)
+        btnCapture.elt.disabled = true
+        btnCapture.mousePressed(selectCapture)
 
-        const a = document.createElement('a')
-        a.href = url
-        a.download = filename
+        btnInput = createButton('입력선택')
+        btnInput.size(78, 25)
+        btnInput.mousePressed(selectInput)
 
-        document.body.appendChild(a)
-        a.click()
+        btnSlot = createButton('슬롯')
+        btnSlot.size(78, 25)
+        btnSlot.elt.disabled = true
+        btnSlot.mousePressed(selectSlot)
 
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
+        btnOption = createButton('옵션')
+        btnOption.size(77, 25)
+        btnOption.mousePressed(selectOption)
+
+        slotContainer = createDiv()
+        slotContainer.class('slotContainer')
+        slotContainer.style('z-index', '-1')
+        slotContainer.style('border-radius', '5px')
+
+        setElementPosition()
+    }
+
+
+    function draw() {
+        if (cap) image(cap, 0, 0, width, height)
+        else background(0)
+
+        // FPS, viewMode표시
+        textSize(12)
+        noStroke()
+        fill(20, 255, 20)
+        text(`FPS: ${frameRate().toFixed(0)}`, 10, 15)
+        text(`보기: ${viewMode}`, 10, 30)
+
+        runTimers()
+        runImages()
+        runScripts()
+
+
+        if (cap && viewMode === 'roi') {
+            const [x1, y1, x2, y2] = ROI.map(v => Math.round(v / ratio))
+            noFill()
+            strokeWeight(2)
+            stroke(20, 20, 255)
+            rect(x1, y1, x2 - x1, y2 - y1)
+        }
+
+        if (cap && viewMode != 'preview') {
+            const x1 = round(slots[viewMode].x1 / ratio)
+            const x2 = round(slots[viewMode].x2 / ratio)
+            const y1 = round(slots[viewMode].y1 / ratio)
+            const y2 = round(slots[viewMode].y2 / ratio)
+            noFill()
+            strokeWeight(2)
+            stroke(20, 20, 255)
+            rect(x1, y1, x2 - x1, y2 - y1)
+
+            const cx = round(slots[viewMode].result.cx / ratio)
+            const cy = round(slots[viewMode].result.cy / ratio)
+            stroke(20, 250, 20)
+            line(0, cy, width, cy)
+            line(cx, 0, cx, height)
+        }
+
+        
+    }
+
+
+    async function runTimers() {
+        if (timerBusy) return
+        timerBusy = true
+        try {
+            for (const name of Object.keys(slots)) {
+                if (slots[name].type === 'timer') {
+                    if (slots[name].run && !slots[name].cooling) {
+                        slots[name].cooling = true
+                        const cooltime = Number(slots[name].cooltime)
+                        const key = slots[name].key
+                        setTimeout(() => {
+                            slots[name].cooling = false
+                        }, cooltime * 1000)
+                        await sendKeys(key)
+                    }
+                }
+            }
+        } finally {
+            timerBusy = false
+        }
     }
 
 
     const matchTemplate = (background, targets, scale = 1.0) => {
         if (!background || !targets || targets.length === 0) return null
-
         const startTime = performance.now()
-
         let src = cv.imread(background)
         let gray = new cv.Mat()
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
-
         const originalCols = gray.cols
         const originalRows = gray.rows
-
         if (scale !== 1.0) {
-            const dsize = new cv.Size(
-                Math.floor(originalCols * scale),
-                Math.floor(originalRows * scale)
-            )
+            const dsize = new cv.Size(Math.floor(originalCols * scale), Math.floor(originalRows * scale))
             let resized = new cv.Mat()
             cv.resize(gray, resized, dsize, 0, 0, cv.INTER_AREA)
             gray.delete()
             gray = resized
         }
-
         // 🔥 평탄화 변수
         let score = -1
         let x = null
@@ -1087,15 +276,11 @@
         let w = 0
         let h = 0
         let targetIndex = -1
-
         targets.forEach((target, idx) => {
             if (!target) return
             let tpl = target
             if (scale !== 1.0) {
-                const dsize = new cv.Size(
-                    Math.floor(target.cols * scale),
-                    Math.floor(target.rows * scale)
-                )
+                const dsize = new cv.Size(Math.floor(target.cols * scale), Math.floor(target.rows * scale))
                 let resizedTpl = new cv.Mat()
                 cv.resize(target, resizedTpl, dsize, 0, 0, cv.INTER_AREA)
                 tpl = resizedTpl
@@ -1121,41 +306,35 @@
         const endTime = performance.now()
         src.delete()
         gray.delete()
-
         let cx = null
         let cy = null
-
         if (x !== null && y !== null) {
             cx = x + Math.floor(w / 2)
             cy = y + Math.floor(h / 2)
         }
-        return { score, x, y, w, h, cx, cy, targetIndex, time: endTime - startTime }
+        return {
+            score,
+            x,
+            y,
+            w,
+            h,
+            cx,
+            cy,
+            targetIndex,
+            time: endTime - startTime
+        }
     }
 
 
-    const loop = async () => {
-        const start = performance.now()
-
-        // Timer
-        for (const name of Object.keys(slots)) {
-            if (slots[name]['type'] == 'timer') {
-                if (slots[name]['run'] && !slots[name]['cooling']) {
-                    slots[name]['cooling'] = true
-                    const cooltime = Number(slots[name].cooltime)
-                    const key = slots[name].key
-                    setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
-                    await send_keys(key)
-                }
-            }
-        }
-
-        // Image Matching
-        if (cap.onStream) {
-            const canvas = cap.getCanvas()
+    async function runImages() {
+        if (!cap) return
+        if (imgBusy) return
+        imgBusy = true
+        try {
+            ctx.drawImage(cap.elt, 0, 0)
             for (const name of Object.keys(slots)) {
                 if (slots[name]['type'] == 'img') {
                     const cooltime = Number(slots[name].cooltime)
-                    // const cooling = slots[name].cooling
                     const threshold = Number(slots[name].threshold)
                     const x1 = Number(slots[name].x1)
                     const x2 = Number(slots[name].x2)
@@ -1164,106 +343,709 @@
                     const key = slots[name].key
                     const scale = slots[name].scale
                     const mats = slots[name].mats
-
                     const w = x2 - x1
                     const h = y2 - y1
                     canvasCrop.width = w
                     canvasCrop.height = h
                     ctxCrop.drawImage(canvas, x1, y1, w, h, 0, 0, w, h)
-
                     const match = matchTemplate(canvasCrop, mats, scale)
                     slots[name].result.value = match.score
                     slots[name].result.bool = match.score >= threshold
                     slots[name].result.cx = match.cx + x1
                     slots[name].result.cy = match.cy + y1
-
-
                     if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']['bool']) {
                         slots[name]['cooling'] = true
-                        setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
-                        await send_keys(key, 'img', name)
+                        setTimeout(() => {
+                            slots[name]['cooling'] = false
+                        }, cooltime * 1000)
+                        await sendKeys(key, 'img', name)
                     }
 
-                    // ROI and Result draw
-                    if (viewSelect.getValue() === name) {
-                        cap.draw.clearRect(0, 0, cap.width, cap.height)
-                        cap.draw.strokeStyle = '#0000FF'
-                        cap.draw.strokeRect(x1, y1, w, h)
-                        cap.draw.strokeStyle = slots[name].result.bool ? '#00FF00' : '#FFFF00'
-                        cap.draw.strokeRect(x1 + match.x, y1 + match.y, match.w, match.h)
-                    }
                     let resultIcon = slots[name].result.bool ? '🟢' : '🟡'
-                    folderSlot.controllers.find(c => c.property === name).name(`${resultIcon} ${name} [${match.score.toFixed(2)} | ${slots[name]['result'].cx}, ${slots[name]['result'].cy}]`)
+                    document.getElementById(`${name}_value`).innerHTML = `${resultIcon}[${match.score.toFixed(2)} | ${slots[name]['result'].cx}, ${slots[name]['result'].cy}]`
                 }
             }
+        } finally {
+            imgBusy = false
         }
+    }
 
-        // Script
-        for (const name of Object.keys(slots)) {
-            if (slots[name]['type'] == 'script') {
-                let result = []
-                for (const slot of slots[name].slots.split(' ').filter(Boolean)) {
-                    if (slot.startsWith('!')) {
-                        if (slots[slot.replace('!', '')].result.bool === false) {
-                            result.push(true)
+
+    async function runScripts() {
+        if (!cap) return
+        if (scriptBusy) return
+        scriptBusy = true
+        try {
+            for (const name of Object.keys(slots)) {
+                if (slots[name]['type'] == 'script') {
+                    let result = []
+                    for (const slot of slots[name].slots.split(' ').filter(Boolean)) {
+                        if (slot.startsWith('!')) {
+                            if (slots[slot.replace('!', '')].result.bool === false) {
+                                result.push(true)
+                            } else {
+                                result.push(false)
+                            }
                         } else {
-                            result.push(false)
+                            if (slots[slot].result.bool === false) {
+                                result.push(false)
+                            } else {
+                                result.push(true)
+                            }
                         }
-                    } else {
-                        if (slots[slot].result.bool === false) {
-                            result.push(false)
-                        } else {
-                            result.push(true)
+                    }
+                    slots[name].result = result.every(v => v === true) ? true : false
+                    let resultIcon = slots[name].result ? '🟢' : '🟡'
+                    document.getElementById(`${name}_value`).innerHTML = resultIcon
+                    if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']) {
+                        slots[name]['cooling'] = true
+                        const cooltime = Number(slots[name].cooltime)
+                        const key = slots[name].key
+                        setTimeout(() => {
+                            slots[name]['cooling'] = false
+                        }, cooltime * 1000)
+                        await sendKeys(key, 'script', name)
+                    }
+                }
+            }
+        } finally {
+            scriptBusy = false
+        }
+    }
+
+
+    function cvLoaded() {
+        cv.onRuntimeInitialized = () => {
+            console.log('opencv.js loaded.')
+            btnCapture.elt.disabled = false
+            btnSlot.elt.disabled = false
+        }
+    }
+
+
+    async function selectInput() {
+        const value = await modal("📢", "입력방식을 선택하세요.", { serial: "하드웨어 시리얼 통신", server: "서버와 통신" })
+        if (value === 'serial') {
+            await serial.connect()
+            if (serial.isConnected) {
+                toast('하드웨어 시리얼 통신에 성공했습니다.')
+                inputMode = 'serial'
+            }
+        } else if (value === "server") {
+            const url = prompt("서버의 URL을 입력하세요", inputURL)
+            if (url === undefined) {
+                toast("입력을 취소했습니다.")
+                return
+            }
+            toast(`입력서버 URL을 ${url}로 적용했습니다.`)
+            inputURL = url
+            localStorage.setItem('inputURL', inputURL)
+            inputMode = 'server'
+        }
+    }
+
+    function inputTest() {
+        if (inputMode === undefined) {
+            toast("입력방식을 선택 후 사용 가능합니다.")
+            return
+        }
+        const cmd = prompt("명령어를 입력하세요.")
+        if (cmd === undefined) {
+            toast("명령어를 입력하지 않았습니다.")
+            return
+        }
+        sendKeys(cmd)
+    }
+
+
+    function wait(msec) {
+        return new Promise(resolve => {
+            setTimeout(resolve, msec)
+        })
+    }
+
+
+    function writeKey(key) {
+        if (inputMode === 'serial' && serial.isConnected) {
+            serial.send(key)
+            console.log(`Serial send : ${key}`)
+        } else if (inputMode === 'server') {
+            if (key.includes(',')) {
+                const [x, y] = key.split(',').map(Number)
+                fetch(`${inputURL}?cmd=click&x=${x}&y=${y}`)
+            } else {
+                fetch(`${inputURL}?cmd=write&key=${key}`)
+            }
+            console.log(`Server send : ${key}`)
+        } else {
+            console.log(`Not connected. ${key}`)
+        }
+    }
+
+
+    async function sendKeys(keys, type = '', name = '') {
+        for (const key of keys.split(' ')) {
+            if (key.indexOf('-') === 0) {
+                const argument = Number(key.slice(1))
+                await wait(argument * 1000)
+            } else if (key.indexOf('@') === 0) {
+                //Magic key
+                const argument = key.slice(1)
+                if (argument.includes('click@') && type === 'img' && name != 'none') {
+                    const idx = argument.indexOf('@')
+                    const argu = Number(argument.slice(idx + 1))
+                    const result = slots[name].result
+                    const magicKey = `${Math.round(result.cx * argu)},${Math.round(result.cy * argu)}`
+                    writeKey(magicKey)
+                } else {
+                    if (argument === 'capture') {
+                        saveCap()
+                    } else if (argument === 'click' && type === 'img' && name != 'none') {
+                        const result = slots[name].result
+                        const magicKey = `${result.cx},${result.cy}`
+                        writeKey(magicKey)
+                    }
+                }
+            } else {
+                writeKey(key)
+            }
+        }
+    }
+
+
+    async function selectCapture() {
+        const value = await modal("📢", "캡처방식을 선택하세요", {
+            capture: "데스크탑 화면",
+            stream: "이미지 스트리밍",
+            user: "카메라(전면)",
+            environment: "카메라(후면)"
+        })
+        if (value === 'capture') startCapture()
+        else if (value === 'user') startCamera('user')
+        else if (value === 'environment') startCamera('environment')
+        else if (value === 'stream') {
+            const url = prompt("스트리밍 서버 URL을 입력하세요.", streamURL)
+            if (url === null) {
+                toast("입력을 취소했습니다.")
+                return
+            }
+            toast(`${url} 주소로 스트리밍을 시작합니다.`)
+            startStream(url)
+        }
+    }
+
+
+    async function selectOption() {
+        const value = await modal("📢", "실행할 기능을 선택하세요.", {
+            capture: "캡처 저장",
+            fps: "FPS 변경",
+            roi: "ROI 보기",
+            input: "입력 테스트"
+        })
+        if (value === 'capture') saveCap()
+        else if (value === 'fps') selectFPS()
+        else if (value === 'roi') selectROI()
+        else if (value === 'input') inputTest()
+    }
+
+
+    function selectROI() {
+        const v = prompt(`ROI 영역을 입력하세요.\n현재 캡처: ${cap.width}x${cap.height}`, ROI.join(', '))
+        const n = v.trim().split(/\s*,\s*/).map(Number)
+        if (n.length !== 4 || !n.every(Number.isFinite) || n[0] >= n[2] || n[1] >= n[3]) {
+            toast('잘못된 ROI 입력입니다.')
+            return
+        }
+        ROI = n
+        viewMode = 'roi'
+        console.log('ROI:', ROI)
+    }
+
+
+    function selectFPS() {
+        const value = prompt("적용할 FPS를 입력하세요. (1~60 사이)")
+        const num = Number(value)
+        if (!value || !Number.isInteger(num)) {
+            toast("숫자만 입력하세요.")
+            return
+        }
+        if (num < 1 || num > 60) {
+            toast("1~60 사이의 값을 입력하세요")
+            return
+        }
+        frameRate(num)
+    }
+
+
+    async function selectSlot() {
+        const value = await modal("📢", "사용할 기능을 선택하세요.", {
+            add: '파일 추가하기',
+            save: '저장하기',
+            load: '불러오기'
+        })
+        if (value === 'add') {
+            addFiles()
+        } else if (value === 'save') {
+            saveImgToStorage()
+                .then(() => saveTxtToStorage())
+                .then(() => report('save'))
+        } else if (value === 'load') {
+            loadImgFromStorage()
+                .then(() => loadTxtFromStorage())
+                .then(() => report('load'))
+                .then(() => checkSlot())
+        }
+    }
+
+
+    function startStream(url) {
+        cap = createImg('', '')
+        cap.elt.crossOrigin = 'anonymous'
+        cap.elt.onload = () => {
+            localStorage.setItem('stream_url', url)
+            onCapReady()
+        }
+        cap.elt.onerror = err => {
+            toast('스트림 연결에 실패했습니다.')
+            cap = undefined
+        }
+        cap.elt.src = url
+    }
+
+
+    async function urlToBase64(url) {
+        const blob = await fetch(url).then(r => r.blob())
+        return await new Promise(resolve => {
+            const reader = new FileReader()
+            reader.onloadend = () => {
+                resolve(reader.result)
+            }
+            reader.readAsDataURL(blob)
+        })
+    }
+
+
+    async function saveImgToStorage() {
+        const data = {}
+        for (const [key, url] of Object.entries(imgObj)) {
+            data[key] = await urlToBase64(url)
+        }
+        localStorage.setItem('images', JSON.stringify(data))
+    }
+
+
+    async function loadImgFromStorage() {
+        const json = localStorage.getItem('images')
+        if (!json) return
+        const data = JSON.parse(json)
+        const tasks = Object.entries(data).map(([key, base64]) => {
+            return new Promise(resolve => {
+                imgObj[key] = base64
+                const img = new Image()
+                img.onload = () => {
+                    const src = cv.imread(img)
+                    const gray = new cv.Mat()
+                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+                    if (imgMatObj[key]) {
+                        imgMatObj[key].delete()
+                    }
+                    imgMatObj[key] = gray.clone()
+                    src.delete()
+                    gray.delete()
+                    resolve()
+                }
+                img.src = base64
+            })
+        })
+        await Promise.all(tasks)
+    }
+
+
+    async function loadTxtFromStorage() {
+        const json = localStorage.getItem('slotFiles')
+        if (!json) return
+        const data = JSON.parse(json)
+        Object.entries(data).forEach(([name, text]) => {
+            slotTexts[name] = text
+            parseSlotText(name, text)
+        })
+        if (validateSlots() === false) {
+            return
+        }
+    }
+
+
+    const loadImg = file => new Promise(resolve => {
+        const key = file.name.split('.')[0]
+        const url = URL.createObjectURL(file)
+        imgObj[key] = url
+        const img = new Image()
+        img.onload = () => {
+            const src = cv.imread(img), gray = new cv.Mat()
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+            imgMatObj[key]?.delete()
+            imgMatObj[key] = gray.clone()
+            src.delete()
+            gray.delete()
+            resolve()
+        }
+        img.src = url
+    })
+
+    const loadTxt = file => new Promise(resolve => {
+        const reader = new FileReader()
+        reader.onload = e => {
+            const name = file.name.replace(/\.txt$/i, '')
+            const text = e.target.result
+            slotTexts[name] = text
+            parseSlotText(name, text)
+            resolve()
+        }
+        reader.readAsText(file)
+    })
+
+
+    async function report(type) {
+        const lenImg = Object.keys(imgObj).length
+        const lenTxt = Object.keys(slots).length
+        if (type === 'load') {
+            if (lenImg && lenTxt) toast(`이미지 ${lenImg}개, 텍스트 ${lenTxt}개 로드 완료.`)
+            else if (lenImg) toast(`이미지 ${lenImg}개 로드 완료.`)
+            else if (lenTxt) toast(`텍스트 ${lenTxt}개 로드 완료.`)
+        } else if (type === 'save') {
+            if (lenImg && lenTxt) toast(`이미지 ${lenImg}개, 텍스트 ${lenTxt}개 저장 완료.`)
+            else if (lenImg) toast(`이미지 ${lenImg}개 저장 완료.`)
+            else if (lenTxt) toast(`텍스트 ${lenTxt}개 저장 완료.`)
+        }
+    }
+
+
+    async function addFiles() {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/*,.txt'
+        input.multiple = true
+
+        input.onchange = async e => {
+            const files = Array.from(e.target.files)
+            const imgFiles = files.filter(f => f.type.startsWith('image/'))
+            const txtFiles = files.filter(f => f.name.toLowerCase().endsWith('.txt'))
+
+            await Promise.all(imgFiles.map(loadImg))
+            await Promise.all(txtFiles.map(loadTxt))
+
+            if (txtFiles.length) {
+                if (!validateSlots()) return
+                await saveTxtToStorage()
+            }
+            await report()
+            checkSlot()
+        }
+        input.click()
+    }
+
+    function parseSlotText(name, text) {
+        const lines = text.split('\n')
+        const data = {}
+        data.cooling = false
+        data.run = false
+        lines.forEach(line => {
+            let [key, value] = line.split(':').map(v => v.trim())
+            if (key == 'url') {
+                const idx = line.indexOf(':')
+                value = line.slice(idx + 1).trim()
+            }
+            if (key === 'img') {
+                const imgs = value.split(' ').map(v => v.trim().toLowerCase())
+                data.img = []
+                data.img.push(...imgs)
+                data.mats = data.img.map(v => imgMatObj[v.split('.')[0]])
+                data.scale = typeof (data.scale) == 'undefined' ? 0.5 : Number(data.scale)
+                data.result = { value: 0, cx: 0, cy: 0, bool: false }
+            } else {
+                data[key] = value
+            }
+        })
+        slots[name] = data
+    }
+
+
+    function validateSlots() {
+        for (const key of Object.keys(slots)) {
+            if (slots[key].type === undefined) {
+                console.log('Type not defined.')
+                delete slots[key]
+                return false
+            } else {
+                if (slots[key].type === 'timer') {
+                    const checker = ['key', 'cooltime']
+                    for (const check of checker) {
+                        if (slots[key].hasOwnProperty(check) === false) {
+                            console.error(`There is no ${check} at ${key}`)
+                            delete slots[key]
+                            return false
+                        }
+                        if (slots[key][check] === undefined || slots[key][check] === '') {
+                            console.error(`There is no value of ${key}-${check}`)
+                            delete slots[key]
+                            return false
                         }
                     }
                 }
-                slots[name].result = result.every(v => v === true) ? true : false
-                let resultIcon = slots[name].result ? '🟢' : '🟡'
-                folderSlot.controllers.find(c => c.property === name).name(`${resultIcon} ${name} `)
-
-                if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']) {
-                    slots[name]['cooling'] = true
-                    const cooltime = Number(slots[name].cooltime)
-                    const key = slots[name].key
-                    setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
-                    await send_keys(key, 'script', name)
+                if (slots[key].type === 'img') {
+                    const checker = ['key', 'img', 'cooltime', 'x1', 'x2', 'y1', 'y2', 'threshold']
+                    for (const check of checker) {
+                        if (slots[key].hasOwnProperty(check) === false) {
+                            console.error(`There is no ${check} at ${key}`)
+                            delete slots[key]
+                            return false
+                        }
+                        if (slots[key][check] === undefined || slots[key][check] === '') {
+                            console.error(`There is no value of ${key}-${check}`)
+                            delete slots[key]
+                            return false
+                        }
+                    }
+                    for (const i of slots[key].img) {
+                        if (imgMatObj[i.split('.')[0]] === undefined) {
+                            console.error(`ImageSlot ${key} Mat Error.`)
+                            delete slots[key]
+                            return false
+                        }
+                    }
+                }
+                if (slots[key].type === 'script') {
+                    const checker = ['key', 'slots', 'cooltime']
+                    for (const check of checker) {
+                        if (slots[key].hasOwnProperty(check) === false) {
+                            console.error(`There is no ${check} at ${key}`)
+                            delete slots[key]
+                            return false
+                        }
+                        if (slots[key][check] === undefined || slots[key][check] === '') {
+                            console.error(`There is no value of ${key}-${check}`)
+                            delete slots[key]
+                            return false
+                        }
+                        for (const s of slots[key].slots.split(' ').filter(Boolean)) {
+                            if (slots[s.replace('!', '')] === undefined) {
+                                console.error(`Script ${key} slots Error.`)
+                                delete slots[key]
+                                return false
+                            }
+                        }
+                    }
+                    slots[key].result = false
+                }
+                if (slots[key].type === 'requestInfo') {
+                    const checker = ['url', 'cooltime']
+                    for (const check of checker) {
+                        if (slots[key].hasOwnProperty(check) === false) {
+                            console.error(`There is no ${check} at ${key}`)
+                            delete slots[key]
+                            return false
+                        }
+                        if (slots[key][check] === undefined || slots[key][check] === '') {
+                            console.error(`There is no value of ${key}-${check}`)
+                            delete slots[key]
+                            return false
+                        }
+                    }
                 }
             }
         }
+        return true
+    }
 
-        // Request Information
-        for (const name of Object.keys(slots)) {
-            if (slots[name]['type'] == 'requestInfo') {
-                if (slots[name]['run'] && !slots[name]['cooling']) {
-                    slots[name]['cooling'] = true
-                    const cooltime = Number(slots[name].cooltime)
-                    const url = slots[name].url
-                    fetch(url).then(response => response.text()).then(data => {
-                        folderSlot.controllers.find(c => c.property === name).name(`🔘 ${name} [${data}]`)
-                    })
-                    setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
-                }
-            }
-        }
 
-        const end = performance.now()
-        const elapsed = end - start
-        const delay = Math.max(0, (1000 / guiObj.fps) - elapsed)
+    async function saveTxtToStorage() {
+        const saveData = {}
+        Object.keys(slotTexts).forEach(key => {
+            saveData[key] = slotTexts[key]
+        })
+        localStorage.setItem('slotFiles', JSON.stringify(saveData))
+    }
 
-        loopTime.setValue(Math.round(elapsed))
-        setTimeout(loop, delay)
+
+    function startCamera(facingMode = 'environment') {
+        const constraints = { audio: false, video: { exact: facingMode } }
+        cap = createCapture(constraints, () => onCapReady())
+    }
+
+
+    function startCapture() {
+        navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, preferCurrentTab: false }).then(stream => {
+            cap = createVideo()
+            cap.elt.srcObject = stream
+            cap.elt.play()
+            cap.elt.onloadedmetadata = () => onCapReady()
+        })
+    }
+
+
+    function setElementPosition() {
+        btnCapture.position(5, cnv.height + 8)
+        btnInput.position(86, cnv.height + 8)
+        btnSlot.position(167, cnv.height + 8)
+        btnOption.position(248, cnv.height + 8)
+        slotContainer.position(5, cnv.height + 35)
+    }
+
+
+    function onCapReady() {
+        console.log(cap.width, cap.height)
+        canvas.width = cap.width
+        canvas.height = cap.height
+        ratio = Number(cap.width / cnvWidth)
+        cnv.resize(cnvWidth, Number(cap.height / ratio))
+        ROI = [0, 0, cap.width, cap.height]
+        cap.hide()
+        setElementPosition()
+        btnCapture.elt.disabled = true
+    }
+
+
+    function saveCap() {
+        if (!cap) return toast('캡처된 영상이 없습니다.')
+        const [x1, y1, x2, y2] = ROI
+        const roi = viewMode === 'roi'
+        const w = roi ? x2 - x1 : cap.width
+        const h = roi ? y2 - y1 : cap.height
+        capForSave.resizeCanvas(w, h)
+        roi ? capForSave.image(cap, 0, 0, w, h, x1, y1, w, h) : capForSave.image(cap, 0, 0)
+        saveCanvas(capForSave, `capture_${getTimestamp()}.jpg`)
+        toast(`capture_${getTimestamp()}.jpg 저장 완료.`)
     }
 
 
     window.onload = () => {
         console.log('Window.onload.')
-        inputURL = localStorage.getItem('inputURL') || ''
-        streamURL = localStorage.getItem('streamURL') || ''
+        inputURL = localStorage.getItem('input_url') || ''
+        streamURL = localStorage.getItem('stream_url') || ''
         console.log('Loaded URLs:', { inputURL, streamURL })
-        moveGUI(0, 0, target_width)
     }
 
 
+    function checkSlot() {
+        for (slot of Object.keys(slots)) {
+            if (document.getElementById(slot) === null) {
+                const type = slots[slot].type
+                let view = false
+                if (type === 'img') {
+                    view = true
+                }
+                addSlot(slot, view)
+            }
+        }
+    }
+
+
+    function addSlot(name, view) {
+        const id = `${name}`
+
+        // slotContainer의 실제 DOM
+        const parent = slotContainer.elt
+
+        // 슬롯
+        const slot = document.createElement('div')
+        slot.id = id
+        slot.style.display = 'flex'
+        slot.style.alignItems = 'center'
+        slot.style.width = '100%'
+        slot.style.height = '32px'
+        slot.style.boxSizing = 'border-box'
+        slot.style.borderBottom = '1px solid #ddd'
+
+        // 좌측 40%
+        const left = document.createElement('div')
+        left.id = `${id}_left`
+        left.style.width = '40%'
+        left.style.display = 'flex'
+        left.style.overflow = 'hidden'
+        left.style.alignItems = 'center'
+
+        const chk = document.createElement('input')
+        chk.type = 'checkbox'
+        chk.id = `${id}_chk`
+        chk.style.transform = 'scale(1.2)'
+        chk.style.margin = '0'
+        chk.style.verticalAlign = 'middle'
+        chk.style.marginLeft = '10px'
+        chk.style.marginRight = '5px'
+        chk.style.marginTop = '5px'
+        chk.style.zIndex = '100'
+        chk.onclick = () => {
+            slots[name].run = chk.checked
+        }
+
+
+        const lbl = document.createElement('label')
+        lbl.id = `${id}_label`
+        lbl.htmlFor = chk.id
+        lbl.innerText = name
+        lbl.style.fontSize = '14px'
+        lbl.style.marginLeft = '4px'
+        lbl.style.whiteSpace = 'nowrap'
+        lbl.style.overflow = 'hidden'
+        lbl.style.textOverflow = 'ellipsis'
+
+        left.append(chk, lbl)
+
+        // 우측 60%
+        const right = document.createElement('div')
+        right.id = `${id}_right`
+        right.style.width = '60%'
+        right.style.display = 'flex'
+        right.style.alignItems = 'center'
+
+        const value = document.createElement('span')
+        value.id = `${id}_value`
+        value.style.flex = '1'
+        value.style.overflow = 'hidden'
+        value.style.textOverflow = 'ellipsis'
+        value.style.whiteSpace = 'nowrap'
+        value.style.fontSize = '14px'
+
+
+        right.appendChild(value)
+
+        if (view) {
+            const btn = document.createElement('button')
+            btn.id = `${id}_view`
+            btn.innerText = '🔍'
+            btn.style.width = '24px'
+            btn.style.height = '24px'
+            btn.style.padding = '0'
+            btn.style.marginLeft = '4px'
+            btn.style.background = 'transparent'
+            btn.style.border = 'none'
+            btn.style.cursor = 'pointer'
+            btn.style.zIndex = '100'
+            btn.onclick = () => {
+                if (viewMode === name) {
+                    viewMode = 'preview'
+                    console.log('preview로 적용')
+                } else {
+                    viewMode = name
+                    console.log(viewMode)
+                }
+            }
+            right.appendChild(btn)
+        }
+
+        slot.append(left, right)
+        parent.appendChild(slot)
+
+        return {
+            slot,
+            left,
+            right,
+            checkbox: chk,
+            label: lbl,
+            value,
+            viewButton: view ? document.getElementById(`${id}_view`) : null
+        }
+    }
 </script>
 
 </html>

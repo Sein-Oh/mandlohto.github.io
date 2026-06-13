@@ -3,18 +3,16 @@
 
 <head>
     <meta charset='utf-8' />
-    <title>만들오토 v1.7 (2026.06.11)</title>
+    <title>만들오토 v2.0 (2026.06.13)</title>
     <script src='https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.min.js'></script>
     <script src="https://cdn.jsdelivr.net/npm/jsframe.js/lib/jsframe.min.js"></script>
     <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
     <script src='webserial.js'></script>
     <style>
-        select {
-            text-align: center;
-        }
-
-        input {
-            box-sizing: border-box;
+        * {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
         }
 
         button {
@@ -45,6 +43,19 @@
             gap: 10px;
         }
 
+        .slotContainer {
+            height: auto;
+            width: 320px;
+            max-height: 400px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
         .container button {
             width: 80%;
             height: 30px;
@@ -58,14 +69,27 @@
 <script>
     let cnv, cap, capForSave
     let inputURL, streamURL
-    let selCapture, selInput, selView, selFPS
     let btnCapture, btnInput, btnSlot, btnOption
+    let slotContainer
+
     let viewMode = 'preview'
     let inputMode = undefined
     let ROI = []
     let ratio = 1
 
+    let timerBusy = false
+    let imgBusy = false
+    let scriptBusy = false
+    let requestBusy = false
+
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    const canvasCrop = document.createElement('canvas')
+    const ctxCrop = canvasCrop.getContext('2d', { willReadFrequently: true })
+
+
     const jsFrame = new JSFrame()
+
 
     function toast(msg) {
         jsFrame.showToast({ html: msg, align: 'center' })
@@ -105,13 +129,6 @@
 
 
     const serial = new WebSerialManager()
-    serial.onReceive = (msg) => {
-        if (msg.trim() === 'OK') {
-            toast('하드웨어 시리얼 통신에 성공했습니다.')
-            inputMode = 'serial'
-            // btnInput.elt.disabled = true
-        }
-    }
 
     const slots = {}
     const slotTexts = {}
@@ -138,6 +155,7 @@
         cnv = createCanvas(cnvWidth, 180)
         cnv.position(5, 5)
         cnv.style('z-index', '-1')
+        cnv.style('border-radius', '5px')
         capForSave = createGraphics(cnvWidth, 180)
         background(0)
 
@@ -159,7 +177,12 @@
         btnOption.size(77, 25)
         btnOption.mousePressed(selectOption)
 
-        setBtnPosition()
+        slotContainer = createDiv()
+        slotContainer.class('slotContainer')
+        slotContainer.style('z-index', '-1')
+        slotContainer.style('border-radius', '5px')
+
+        setElementPosition()
     }
 
 
@@ -167,11 +190,17 @@
         if (cap) image(cap, 0, 0, width, height)
         else background(0)
 
-        // FPS 표시
-        textSize(16)
+        // FPS, viewMode표시
+        textSize(12)
         noStroke()
         fill(20, 255, 20)
-        text(`FPS: ${frameRate().toFixed(0)}`, 10, 20)
+        text(`FPS: ${frameRate().toFixed(0)}`, 10, 15)
+        text(`보기: ${viewMode}`, 10, 30)
+
+        runTimers()
+        runImages()
+        runScripts()
+
 
         if (cap && viewMode === 'roi') {
             const [x1, y1, x2, y2] = ROI.map(v => Math.round(v / ratio))
@@ -179,6 +208,208 @@
             strokeWeight(2)
             stroke(20, 20, 255)
             rect(x1, y1, x2 - x1, y2 - y1)
+        }
+
+        if (cap && viewMode != 'preview') {
+            const x1 = round(slots[viewMode].x1 / ratio)
+            const x2 = round(slots[viewMode].x2 / ratio)
+            const y1 = round(slots[viewMode].y1 / ratio)
+            const y2 = round(slots[viewMode].y2 / ratio)
+            noFill()
+            strokeWeight(2)
+            stroke(20, 20, 255)
+            rect(x1, y1, x2 - x1, y2 - y1)
+
+            const cx = round(slots[viewMode].result.cx / ratio)
+            const cy = round(slots[viewMode].result.cy / ratio)
+            stroke(20, 250, 20)
+            line(0, cy, width, cy)
+            line(cx, 0, cx, height)
+        }
+
+        
+    }
+
+
+    async function runTimers() {
+        if (timerBusy) return
+        timerBusy = true
+        try {
+            for (const name of Object.keys(slots)) {
+                if (slots[name].type === 'timer') {
+                    if (slots[name].run && !slots[name].cooling) {
+                        slots[name].cooling = true
+                        const cooltime = Number(slots[name].cooltime)
+                        const key = slots[name].key
+                        setTimeout(() => {
+                            slots[name].cooling = false
+                        }, cooltime * 1000)
+                        await sendKeys(key)
+                    }
+                }
+            }
+        } finally {
+            timerBusy = false
+        }
+    }
+
+
+    const matchTemplate = (background, targets, scale = 1.0) => {
+        if (!background || !targets || targets.length === 0) return null
+        const startTime = performance.now()
+        let src = cv.imread(background)
+        let gray = new cv.Mat()
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+        const originalCols = gray.cols
+        const originalRows = gray.rows
+        if (scale !== 1.0) {
+            const dsize = new cv.Size(Math.floor(originalCols * scale), Math.floor(originalRows * scale))
+            let resized = new cv.Mat()
+            cv.resize(gray, resized, dsize, 0, 0, cv.INTER_AREA)
+            gray.delete()
+            gray = resized
+        }
+        // 🔥 평탄화 변수
+        let score = -1
+        let x = null
+        let y = null
+        let w = 0
+        let h = 0
+        let targetIndex = -1
+        targets.forEach((target, idx) => {
+            if (!target) return
+            let tpl = target
+            if (scale !== 1.0) {
+                const dsize = new cv.Size(Math.floor(target.cols * scale), Math.floor(target.rows * scale))
+                let resizedTpl = new cv.Mat()
+                cv.resize(target, resizedTpl, dsize, 0, 0, cv.INTER_AREA)
+                tpl = resizedTpl
+            }
+            if (gray.cols < tpl.cols || gray.rows < tpl.rows) {
+                if (tpl !== target) tpl.delete()
+                return
+            }
+            const result = new cv.Mat()
+            cv.matchTemplate(gray, tpl, result, cv.TM_CCOEFF_NORMED)
+            const minMax = cv.minMaxLoc(result)
+            if (minMax.maxVal > score) {
+                score = minMax.maxVal
+                x = Math.floor(minMax.maxLoc.x / scale)
+                y = Math.floor(minMax.maxLoc.y / scale)
+                w = target.cols
+                h = target.rows
+                targetIndex = idx
+            }
+            result.delete()
+            if (tpl !== target) tpl.delete()
+        })
+        const endTime = performance.now()
+        src.delete()
+        gray.delete()
+        let cx = null
+        let cy = null
+        if (x !== null && y !== null) {
+            cx = x + Math.floor(w / 2)
+            cy = y + Math.floor(h / 2)
+        }
+        return {
+            score,
+            x,
+            y,
+            w,
+            h,
+            cx,
+            cy,
+            targetIndex,
+            time: endTime - startTime
+        }
+    }
+
+
+    async function runImages() {
+        if (!cap) return
+        if (imgBusy) return
+        imgBusy = true
+        try {
+            ctx.drawImage(cap.elt, 0, 0)
+            for (const name of Object.keys(slots)) {
+                if (slots[name]['type'] == 'img') {
+                    const cooltime = Number(slots[name].cooltime)
+                    const threshold = Number(slots[name].threshold)
+                    const x1 = Number(slots[name].x1)
+                    const x2 = Number(slots[name].x2)
+                    const y1 = Number(slots[name].y1)
+                    const y2 = Number(slots[name].y2)
+                    const key = slots[name].key
+                    const scale = slots[name].scale
+                    const mats = slots[name].mats
+                    const w = x2 - x1
+                    const h = y2 - y1
+                    canvasCrop.width = w
+                    canvasCrop.height = h
+                    ctxCrop.drawImage(canvas, x1, y1, w, h, 0, 0, w, h)
+                    const match = matchTemplate(canvasCrop, mats, scale)
+                    slots[name].result.value = match.score
+                    slots[name].result.bool = match.score >= threshold
+                    slots[name].result.cx = match.cx + x1
+                    slots[name].result.cy = match.cy + y1
+                    if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']['bool']) {
+                        slots[name]['cooling'] = true
+                        setTimeout(() => {
+                            slots[name]['cooling'] = false
+                        }, cooltime * 1000)
+                        await sendKeys(key, 'img', name)
+                    }
+
+                    let resultIcon = slots[name].result.bool ? '🟢' : '🟡'
+                    document.getElementById(`${name}_value`).innerHTML = `${resultIcon}[${match.score.toFixed(2)} | ${slots[name]['result'].cx}, ${slots[name]['result'].cy}]`
+                }
+            }
+        } finally {
+            imgBusy = false
+        }
+    }
+
+
+    async function runScripts() {
+        if (!cap) return
+        if (scriptBusy) return
+        scriptBusy = true
+        try {
+            for (const name of Object.keys(slots)) {
+                if (slots[name]['type'] == 'script') {
+                    let result = []
+                    for (const slot of slots[name].slots.split(' ').filter(Boolean)) {
+                        if (slot.startsWith('!')) {
+                            if (slots[slot.replace('!', '')].result.bool === false) {
+                                result.push(true)
+                            } else {
+                                result.push(false)
+                            }
+                        } else {
+                            if (slots[slot].result.bool === false) {
+                                result.push(false)
+                            } else {
+                                result.push(true)
+                            }
+                        }
+                    }
+                    slots[name].result = result.every(v => v === true) ? true : false
+                    let resultIcon = slots[name].result ? '🟢' : '🟡'
+                    document.getElementById(`${name}_value`).innerHTML = resultIcon
+                    if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']) {
+                        slots[name]['cooling'] = true
+                        const cooltime = Number(slots[name].cooltime)
+                        const key = slots[name].key
+                        setTimeout(() => {
+                            slots[name]['cooling'] = false
+                        }, cooltime * 1000)
+                        await sendKeys(key, 'script', name)
+                    }
+                }
+            }
+        } finally {
+            scriptBusy = false
         }
     }
 
@@ -193,9 +424,13 @@
 
 
     async function selectInput() {
-        const value = await modal("입력방식 선택", "입력방식을 선택하세요.", { serial: "하드웨어 시리얼 통신", server: "서버와 통신" })
+        const value = await modal("📢", "입력방식을 선택하세요.", { serial: "하드웨어 시리얼 통신", server: "서버와 통신" })
         if (value === 'serial') {
-            serial.connect().then(() => serial.send("check"))
+            await serial.connect()
+            if (serial.isConnected) {
+                toast('하드웨어 시리얼 통신에 성공했습니다.')
+                inputMode = 'serial'
+            }
         } else if (value === "server") {
             const url = prompt("서버의 URL을 입력하세요", inputURL)
             if (url === undefined) {
@@ -203,8 +438,7 @@
                 return
             }
             toast(`입력서버 URL을 ${url}로 적용했습니다.`)
-            inputURL = value
-            // btnInput.elt.disabled = true
+            inputURL = url
             localStorage.setItem('inputURL', inputURL)
             inputMode = 'server'
         }
@@ -220,12 +454,67 @@
             toast("명령어를 입력하지 않았습니다.")
             return
         }
-        console.log(cmd)
+        sendKeys(cmd)
+    }
+
+
+    function wait(msec) {
+        return new Promise(resolve => {
+            setTimeout(resolve, msec)
+        })
+    }
+
+
+    function writeKey(key) {
+        if (inputMode === 'serial' && serial.isConnected) {
+            serial.send(key)
+            console.log(`Serial send : ${key}`)
+        } else if (inputMode === 'server') {
+            if (key.includes(',')) {
+                const [x, y] = key.split(',').map(Number)
+                fetch(`${inputURL}?cmd=click&x=${x}&y=${y}`)
+            } else {
+                fetch(`${inputURL}?cmd=write&key=${key}`)
+            }
+            console.log(`Server send : ${key}`)
+        } else {
+            console.log(`Not connected. ${key}`)
+        }
+    }
+
+
+    async function sendKeys(keys, type = '', name = '') {
+        for (const key of keys.split(' ')) {
+            if (key.indexOf('-') === 0) {
+                const argument = Number(key.slice(1))
+                await wait(argument * 1000)
+            } else if (key.indexOf('@') === 0) {
+                //Magic key
+                const argument = key.slice(1)
+                if (argument.includes('click@') && type === 'img' && name != 'none') {
+                    const idx = argument.indexOf('@')
+                    const argu = Number(argument.slice(idx + 1))
+                    const result = slots[name].result
+                    const magicKey = `${Math.round(result.cx * argu)},${Math.round(result.cy * argu)}`
+                    writeKey(magicKey)
+                } else {
+                    if (argument === 'capture') {
+                        saveCap()
+                    } else if (argument === 'click' && type === 'img' && name != 'none') {
+                        const result = slots[name].result
+                        const magicKey = `${result.cx},${result.cy}`
+                        writeKey(magicKey)
+                    }
+                }
+            } else {
+                writeKey(key)
+            }
+        }
     }
 
 
     async function selectCapture() {
-        const value = await modal("캡처", "캡처방식을 선택하세요", {
+        const value = await modal("📢", "캡처방식을 선택하세요", {
             capture: "데스크탑 화면",
             stream: "이미지 스트리밍",
             user: "카메라(전면)",
@@ -247,11 +536,10 @@
 
 
     async function selectOption() {
-        const value = await modal("기능 선택", "실행할 기능을 선택하세요.", {
+        const value = await modal("📢", "실행할 기능을 선택하세요.", {
             capture: "캡처 저장",
             fps: "FPS 변경",
             roi: "ROI 보기",
-            slot: "슬롯 보기",
             input: "입력 테스트"
         })
         if (value === 'capture') saveCap()
@@ -290,7 +578,7 @@
 
 
     async function selectSlot() {
-        const value = await modal("기능 선택", "사용할 기능을 선택하세요.", {
+        const value = await modal("📢", "사용할 기능을 선택하세요.", {
             add: '파일 추가하기',
             save: '저장하기',
             load: '불러오기'
@@ -305,6 +593,7 @@
             loadImgFromStorage()
                 .then(() => loadTxtFromStorage())
                 .then(() => report('load'))
+                .then(() => checkSlot())
         }
     }
 
@@ -416,7 +705,7 @@
     })
 
 
-    function report(type) {
+    async function report(type) {
         const lenImg = Object.keys(imgObj).length
         const lenTxt = Object.keys(slots).length
         if (type === 'load') {
@@ -449,7 +738,8 @@
                 if (!validateSlots()) return
                 await saveTxtToStorage()
             }
-            report('load')
+            await report()
+            checkSlot()
         }
         input.click()
     }
@@ -593,21 +883,24 @@
     }
 
 
-    function setBtnPosition() {
+    function setElementPosition() {
         btnCapture.position(5, cnv.height + 8)
         btnInput.position(86, cnv.height + 8)
         btnSlot.position(167, cnv.height + 8)
         btnOption.position(248, cnv.height + 8)
+        slotContainer.position(5, cnv.height + 35)
     }
 
 
     function onCapReady() {
         console.log(cap.width, cap.height)
+        canvas.width = cap.width
+        canvas.height = cap.height
         ratio = Number(cap.width / cnvWidth)
         cnv.resize(cnvWidth, Number(cap.height / ratio))
         ROI = [0, 0, cap.width, cap.height]
         cap.hide()
-        setBtnPosition()
+        setElementPosition()
         btnCapture.elt.disabled = true
     }
 
@@ -621,6 +914,7 @@
         capForSave.resizeCanvas(w, h)
         roi ? capForSave.image(cap, 0, 0, w, h, x1, y1, w, h) : capForSave.image(cap, 0, 0)
         saveCanvas(capForSave, `capture_${getTimestamp()}.jpg`)
+        toast(`capture_${getTimestamp()}.jpg 저장 완료.`)
     }
 
 
@@ -631,6 +925,127 @@
         console.log('Loaded URLs:', { inputURL, streamURL })
     }
 
+
+    function checkSlot() {
+        for (slot of Object.keys(slots)) {
+            if (document.getElementById(slot) === null) {
+                const type = slots[slot].type
+                let view = false
+                if (type === 'img') {
+                    view = true
+                }
+                addSlot(slot, view)
+            }
+        }
+    }
+
+
+    function addSlot(name, view) {
+        const id = `${name}`
+
+        // slotContainer의 실제 DOM
+        const parent = slotContainer.elt
+
+        // 슬롯
+        const slot = document.createElement('div')
+        slot.id = id
+        slot.style.display = 'flex'
+        slot.style.alignItems = 'center'
+        slot.style.width = '100%'
+        slot.style.height = '32px'
+        slot.style.boxSizing = 'border-box'
+        slot.style.borderBottom = '1px solid #ddd'
+
+        // 좌측 40%
+        const left = document.createElement('div')
+        left.id = `${id}_left`
+        left.style.width = '40%'
+        left.style.display = 'flex'
+        left.style.overflow = 'hidden'
+        left.style.alignItems = 'center'
+
+        const chk = document.createElement('input')
+        chk.type = 'checkbox'
+        chk.id = `${id}_chk`
+        chk.style.transform = 'scale(1.2)'
+        chk.style.margin = '0'
+        chk.style.verticalAlign = 'middle'
+        chk.style.marginLeft = '10px'
+        chk.style.marginRight = '5px'
+        chk.style.marginTop = '5px'
+        chk.style.zIndex = '100'
+        chk.onclick = () => {
+            slots[name].run = chk.checked
+        }
+
+
+        const lbl = document.createElement('label')
+        lbl.id = `${id}_label`
+        lbl.htmlFor = chk.id
+        lbl.innerText = name
+        lbl.style.fontSize = '14px'
+        lbl.style.marginLeft = '4px'
+        lbl.style.whiteSpace = 'nowrap'
+        lbl.style.overflow = 'hidden'
+        lbl.style.textOverflow = 'ellipsis'
+
+        left.append(chk, lbl)
+
+        // 우측 60%
+        const right = document.createElement('div')
+        right.id = `${id}_right`
+        right.style.width = '60%'
+        right.style.display = 'flex'
+        right.style.alignItems = 'center'
+
+        const value = document.createElement('span')
+        value.id = `${id}_value`
+        value.style.flex = '1'
+        value.style.overflow = 'hidden'
+        value.style.textOverflow = 'ellipsis'
+        value.style.whiteSpace = 'nowrap'
+        value.style.fontSize = '14px'
+
+
+        right.appendChild(value)
+
+        if (view) {
+            const btn = document.createElement('button')
+            btn.id = `${id}_view`
+            btn.innerText = '🔍'
+            btn.style.width = '24px'
+            btn.style.height = '24px'
+            btn.style.padding = '0'
+            btn.style.marginLeft = '4px'
+            btn.style.background = 'transparent'
+            btn.style.border = 'none'
+            btn.style.cursor = 'pointer'
+            btn.style.zIndex = '100'
+            btn.onclick = () => {
+                if (viewMode === name) {
+                    viewMode = 'preview'
+                    console.log('preview로 적용')
+                } else {
+                    viewMode = name
+                    console.log(viewMode)
+                }
+            }
+            right.appendChild(btn)
+        }
+
+        slot.append(left, right)
+        parent.appendChild(slot)
+
+        return {
+            slot,
+            left,
+            right,
+            checkbox: chk,
+            label: lbl,
+            value,
+            viewButton: view ? document.getElementById(`${id}_view`) : null
+        }
+    }
 </script>
 
 </html>

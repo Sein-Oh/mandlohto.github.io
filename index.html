@@ -227,7 +227,7 @@
             line(cx, 0, cx, height)
         }
 
-        
+
     }
 
 
@@ -540,12 +540,30 @@
             capture: "캡처 저장",
             fps: "FPS 변경",
             roi: "ROI 보기",
-            input: "입력 테스트"
+            input: "입력 테스트",
+            form: "양식 다운로드"
         })
         if (value === 'capture') saveCap()
         else if (value === 'fps') selectFPS()
         else if (value === 'roi') selectROI()
         else if (value === 'input') inputTest()
+        else if (value === "form") {
+            const v = await modal("📢", "다운로드 양식을 선택하세요.", {
+                timer: "타이머",
+                img: "이미지",
+                script: "스크립트"
+            })
+            if (v === "timer") {
+                const text = `type: timer\nkey : \ncooltime :`
+                downloadTextFile('Form_Timer', text)
+            } else if (v === "img") {
+                const text = `type : img\nkey : \nimg : \ncooltime : \nx1 :\ny1 :\nx2 :\ny2 : \nthreshold : 0.8\nscale : 0.5`
+                downloadTextFile('Form_Image', text)
+            } else if (v === "script") {
+                const text = `type : script\nkey : \nslots : \ncooltime : `
+                downloadTextFile('Form_Script', text)
+            }
+        }
     }
 
 
@@ -956,10 +974,10 @@
         slot.style.boxSizing = 'border-box'
         slot.style.borderBottom = '1px solid #ddd'
 
-        // 좌측 40%
+        // 좌측 30%
         const left = document.createElement('div')
         left.id = `${id}_left`
-        left.style.width = '40%'
+        left.style.width = '30%'
         left.style.display = 'flex'
         left.style.overflow = 'hidden'
         left.style.alignItems = 'center'
@@ -983,7 +1001,9 @@
         lbl.id = `${id}_label`
         lbl.htmlFor = chk.id
         lbl.innerText = name
-        lbl.style.fontSize = '14px'
+        lbl.style.fontSize = '12px'
+        lbl.style.flex = '1'
+        lbl.style.minWidth = '0'
         lbl.style.marginLeft = '4px'
         lbl.style.whiteSpace = 'nowrap'
         lbl.style.overflow = 'hidden'
@@ -991,10 +1011,10 @@
 
         left.append(chk, lbl)
 
-        // 우측 60%
+        // 우측 70%
         const right = document.createElement('div')
         right.id = `${id}_right`
-        right.style.width = '60%'
+        right.style.width = '70%'
         right.style.display = 'flex'
         right.style.alignItems = 'center'
 
@@ -1004,7 +1024,7 @@
         value.style.overflow = 'hidden'
         value.style.textOverflow = 'ellipsis'
         value.style.whiteSpace = 'nowrap'
-        value.style.fontSize = '14px'
+        value.style.fontSize = '12px'
 
 
         right.appendChild(value)
@@ -1045,6 +1065,20 @@
             value,
             viewButton: view ? document.getElementById(`${id}_view`) : null
         }
+    }
+
+    const downloadTextFile = (filename, content) => {
+        const blob = new Blob([content], {
+            type: 'text/plain;charset=utf-8'
+        })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
     }
 </script>
 

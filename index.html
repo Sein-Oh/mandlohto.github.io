@@ -3,7 +3,7 @@
 
 <head>
     <meta charset='utf-8' />
-    <title>만들오토 v2.0 (2026.06.13)</title>
+    <title>만들오토 v2.01 (2026.06.14)</title>
     <script src='https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.min.js'></script>
     <script src="https://cdn.jsdelivr.net/npm/jsframe.js/lib/jsframe.min.js"></script>
     <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
@@ -886,10 +886,14 @@
 
 
     function startCamera(facingMode = 'environment') {
-        const constraints = { audio: false, video: { exact: facingMode } }
+        const constraints = {
+            audio: false,
+            video: {
+                facingMode: { exact: facingMode }
+            }
+        }
         cap = createCapture(constraints, () => onCapReady())
     }
-
 
     function startCapture() {
         navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, preferCurrentTab: false }).then(stream => {

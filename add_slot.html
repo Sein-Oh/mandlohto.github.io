@@ -28,14 +28,9 @@
 		console.log(name)
 	}
 	
-    function addSlot(parent, name, view=false, callback=false) {
+    function add_slot(parent, name, callback=false) {
 		if (document.getElementById(name)) {
 			console.log("Element already exist.")
-			return
-		}
-		
-		if (view && !callback) {
-			console.log("view need callback")
 			return
 		}
 		
@@ -69,11 +64,12 @@
 		button.style.background = 'transparent'
 		button.style.border = 'none'
 		button.style.cursor = 'pointer'
-		if (callback) button.onclick = () => callback(name)
 		
 		slot.appendChild(label)
-		if (view) slot.appendChild(button)
-		
+		if (callback) {
+			button.onclick = () => callback(name)
+			slot.appendChild(button)
+		}		
 		parent.appendChild(slot)
     }
 </script>

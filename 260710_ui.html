@@ -154,7 +154,7 @@
     <button id="btn9">불러오기</button>
     <hr>
     <span>옵션</span>
-    <button>캡처 저장</button>
+    <button onclick="save_frame()">캡처 저장</button>
     <button onclick="change_FPS()">FPS변경</button>
     <button>ROI보기</button>
 	<button onclick="toggle_capture_info()">캡처정보 보기</button>
@@ -185,6 +185,7 @@
 	let fps = 5
 	let prev_time = 0
 	let show_capture_info = true
+	let roi_view = false
 	
 /*
   const side = document.getElementById("side")
@@ -198,6 +199,10 @@
   
   const toggle_capture_info = ( ) => {
 	show_capture_info = !show_capture_info
+  }
+
+  const toggle_roi_view = ( ) => {
+	roi_view = !roi_view
   }
 
   const slot_container = document.getElementById("container")
@@ -300,7 +305,7 @@
 	fps = num
   }
   
- const getTimestamp = () => {
+ const get_timestamp = () => {
         let now = new Date()
         let YY = String(now.getFullYear()).slice(-2)
         let MM = String(now.getMonth() + 1).padStart(2, '0')
@@ -327,6 +332,17 @@
 		URL.revokeObjectURL(a.href)
 	}, "image/jpeg", 0.8)
 	console.log("Frame saved.")
+  }
+  
+  const save_frame = () => {
+	if (roi_view) {
+		console.log("Not ready")
+	} else {
+		const file_name = get_timestamp() + "_capture.jpg"
+		const source = (stream_mode === "desktop") ? video : (stream_mode === "stream") ? img : null
+		if (source === null) return
+		save_canvas(source, file_name, 0, 0, canvas.width, canvas.height)
+	}
   }
   
   

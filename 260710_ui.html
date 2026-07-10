@@ -353,21 +353,20 @@
 	ctx.lineWidth = 10
 	ctx.strokeStyle = "blue"
 	//ctx.strokeRect(10, 10, 1900, 1000)
-	
-	
-	
-	
 	const elapsed = performance.now() - start
 	const delay = Math.max(0, (1000 / fps) - elapsed)
 	if (show_capture_info) {
+		ctx.fillStyle = "rgba(50,50,50,0.5)"
+		ctx.fillRect(20, 20, 800, 320)
 		ctx.font = "900 80px gothic"
 		ctx.fillStyle = "rgba(124,252,0,1)"
-		ctx.fillText(`Loop time : ${elapsed.toFixed(0)} [ms]`, 20, 100)
+		ctx.fillText(`Loop time : ${elapsed.toFixed(0)} [ms]`, 50, 300)
 		
 		const used_time = start - prev_time
 		prev_time = start
 		const real_fps = 1000/used_time
-		ctx.fillText(`Real FPS : ${real_fps.toFixed(1)}`, 20, 200)
+		ctx.fillText(`Target FPS : ${fps}`, 50, 100)
+		ctx.fillText(`Real FPS : ${real_fps.toFixed(1)}`, 50, 200)
 	}
 	setTimeout(loop, delay)
   }

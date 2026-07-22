@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>만들오토 2.0 (`26.07.13)</title>
+  <title>만들오토 2.0 (`26.07.22)</title>
   <script async src="opencv.js" onload="cv_loaded()" type="text/javascript"></script>
   <style>
     :root {
@@ -207,7 +207,7 @@
     #toast_container {
       position: fixed;
       z-index: 10;
-      top: 14px;
+      top: 50px;
       left: 50%;
       display: grid;
       gap: 6px;
@@ -245,6 +245,7 @@
     <button class="opencv_button" onclick="load_slot_from_storage()" disabled>불러오기</button>
     <hr>
     <span class="side_title">옵션</span>
+    <button onclick="capture_info.classList.toggle('show')">캡처정보 열기/닫기</button>
     <button onclick="save_capture()">캡처 저장</button>
     <button onclick="select_fps()">FPS 변경</button>
     <button onclick="select_roi()">ROI 보기</button>
@@ -335,7 +336,7 @@
         capture_info_body.appendChild(row)
       })
       capture_info.onclick = () => capture_info.classList.toggle("show")
-      canvas.onclick = () => capture_info.classList.toggle("show")
+      // canvas.onclick = () => capture_info.classList.toggle("show")
       canvas.onmousemove = update_mouse_position
       canvas.onmouseleave = () => { mouse_position = "-" }
     }

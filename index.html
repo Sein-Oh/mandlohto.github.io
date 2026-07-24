@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>만들오토 2.0 (`26.07.24)</title>
+  <title>만들오토 2.0 (`26.07.13)</title>
   <script async src="opencv.js" onload="cv_loaded()" type="text/javascript"></script>
   <style>
     :root {
@@ -124,11 +124,29 @@
       position: relative;
       overflow: hidden;
       line-height: 0;
-      transition: width 0.25s ease;
+      display: flex;
+      justify-content: center;
+      transition: min-height .25s;
     }
 
-    #canvas_container.mini {
-      width: calc(min(var(--slot-width), calc(100% - 10px)) * 0.2);
+    #canvas_container {
+      display: flex;
+      justify-content: center;
+      overflow: hidden;
+      transition:
+        height .25s ease,
+        min-height .25s ease;
+    }
+
+    #canvas {
+      width: 100%;
+      height: auto;
+      transform-origin: top center;
+      transition: transform .25s;
+    }
+
+    #canvas_container.mini #canvas {
+      transform: scale(.2);
     }
 
     #canvas_container.show {
@@ -343,7 +361,15 @@
       capture_info.onclick = () => capture_info.classList.toggle("show")
 
       canvas.onclick = () => {
-        canvas_container.classList.toggle("mini")
+        const mini = canvas_container.classList.toggle("mini")
+
+        if (mini) {
+          const rect = canvas.getBoundingClientRect()
+
+          canvas_container.style.height = `${rect.height * 0.2}px`
+        } else {
+          canvas_container.style.height = `${canvas.height * canvas.offsetWidth / canvas.width}px`
+        }
       }
 
       canvas.onmousemove = update_mouse_position

@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>만들오토 2.0 (`26.07.22)</title>
+  <title>만들오토 2.0 (`26.07.24)</title>
   <script async src="opencv.js" onload="cv_loaded()" type="text/javascript"></script>
   <style>
     :root {
@@ -124,6 +124,11 @@
       position: relative;
       overflow: hidden;
       line-height: 0;
+      transition: width 0.25s ease;
+    }
+
+    #canvas_container.mini {
+      width: calc(min(var(--slot-width), calc(100% - 10px)) * 0.2);
     }
 
     #canvas_container.show {
@@ -222,7 +227,6 @@
       box-shadow: 0 3px 12px #0003;
       font-size: 14px;
     }
-
   </style>
 </head>
 
@@ -335,8 +339,13 @@
         row.innerHTML = `<th>${key}</th><td id="${id}"></td>`
         capture_info_body.appendChild(row)
       })
+
       capture_info.onclick = () => capture_info.classList.toggle("show")
-      // canvas.onclick = () => capture_info.classList.toggle("show")
+
+      canvas.onclick = () => {
+        canvas_container.classList.toggle("mini")
+      }
+
       canvas.onmousemove = update_mouse_position
       canvas.onmouseleave = () => { mouse_position = "-" }
     }
